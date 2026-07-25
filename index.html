@@ -48,7 +48,29 @@
       <p style="color:var(--ink-soft);font-size:14px;">Acceso exclusivo para la dueña del emprendimiento.</p>
       <form id="login-form" onsubmit="return handleLogin(event)">
         <div class="field"><label>Usuario</label><input id="login-user" value="profe" required></div>
-        <div class="field"><label>Contraseña</label><input id="login-pass" type="password" required placeholder="•••••••••"></div>
+        <div class="field">
+  <label>Correo electrónico</label>
+
+  <input
+    id="login-user"
+    type="email"
+    autocomplete="email"
+    required
+    placeholder="correo@ejemplo.com"
+  >
+</div>
+
+<div class="field">
+  <label>Contraseña</label>
+
+  <input
+    id="login-pass"
+    type="password"
+    autocomplete="current-password"
+    required
+    placeholder="•••••••••"
+  >
+</div>
         <div id="login-error" class="error-box hidden">Usuario o contraseña incorrectos.</div>
         <button class="cta-btn" style="width:100%;margin-top:6px;" type="submit">Ingresar</button>
       </form>
@@ -73,6 +95,8 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./js/supabase-config.js"></script>
 <script src="/js/script.js"></script>
 </body>
 </html>
