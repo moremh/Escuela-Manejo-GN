@@ -2799,30 +2799,35 @@ function escapeHTML(value){
 }
 
 /* ==================================================================
-   ADMINISTRADOR: AUTENTICACIÓN
+   ADMIN — AUTENTICACIÓN
    ================================================================== */
 
 async function currentSessionIsAdmin(){
-  const {
-    data: { session },
-    error: sessionError
-  } =
-    await supabaseClient
+  try{
+    const {
+      data: { session },
+      error: sessionError
+    } = await supabaseClient
       .auth
       .getSession();
 
-  if(
-    sessionError ||
-    !session
-  ){
-    return false;
-  }
+    if(sessionError){
+      console.error(
+        'Error consultando la sesión:',
+        sessionError
+      );
 
-  const {
-    data,
-    error
-  } =
-    await supabaseClient
+      return false;
+    }
+
+    if(!session){
+      return false;
+    }
+
+    const {
+      data,
+      error
+    } = await supabaseClient
       .from('admin_users')
       .select('user_id')
       .eq(
@@ -2831,32 +2836,46 @@ async function currentSessionIsAdmin(){
       )
       .maybeSingle();
 
-  if(error){
+    if(error){
+      console.error(
+        'No se pudo verificar el acceso administrativo:',
+        error
+      );
+
+      return false;
+    }
+
+    return Boolean(data);
+
+  }catch(error){
     console.error(
-      'No se pudo verificar el acceso administrativo:',
+      'Error verificando la sesión administrativa:',
       error
     );
 
     return false;
   }
-
-  return Boolean(data);
 }
 
-async function openAdmin(){
-  document
-    .getElementById(
-      'public-view'
-    )
-    .classList
-    .add('hidden');
 
-  document
-    .getElementById(
+async function openAdmin(){
+  const publicView =
+    document.getElementById(
+      'public-view'
+    );
+
+  const adminView =
+    document.getElementById(
       'admin-view'
-    )
-    .classList
-    .remove('hidden');
+    );
+
+  publicView.classList.add(
+    'hidden'
+  );
+
+  adminView.classList.remove(
+    'hidden'
+  );
 
   try{
     adminAuthed =
@@ -2867,6 +2886,7 @@ async function openAdmin(){
     }else{
       showAdminLogin();
     }
+
   }catch(error){
     console.error(
       'No se pudo abrir el panel:',
@@ -2874,9 +2894,11 @@ async function openAdmin(){
     );
 
     adminAuthed = false;
+
     showAdminLogin();
   }
 }
+
 
 function closeAdmin(){
   document
@@ -2893,6 +2915,7 @@ function closeAdmin(){
     .classList
     .remove('hidden');
 }
+
 
 function showAdminLogin(){
   document
@@ -2915,18 +2938,25 @@ function showAdminLogin(){
     );
 
   if(errorBox){
+    errorBox.textContent =
+      'Correo o contraseña incorrectos.';
+
     errorBox
       .classList
       .add('hidden');
   }
 }
 
+
 async function handleLogin(event){
   event.preventDefault();
 
+  const form =
+    event.currentTarget;
+
   const emailInput =
     document.getElementById(
-      'login-user'
+      'login-email'
     );
 
   const passwordInput =
@@ -2940,12 +2970,14 @@ async function handleLogin(event){
     );
 
   const submitButton =
-    event.target.querySelector(
+    form.querySelector(
       'button[type="submit"]'
     );
 
   const email =
-    emailInput.value.trim();
+    emailInput.value
+      .trim()
+      .toLowerCase();
 
   const password =
     passwordInput.value;
@@ -2954,21 +2986,65 @@ async function handleLogin(event){
     .classList
     .add('hidden');
 
+  errorBox.textContent =
+    'Correo o contraseña incorrectos.';
+
+  if(!email){
+    errorBox.textContent =
+      'Ingresá tu correo electrónico.';
+
+    errorBox
+      .classList
+      .remove('hidden');
+
+    emailInput.focus();
+
+    return false;
+  }
+
+  if(!password){
+    errorBox.textContent =
+      'Ingresá tu contraseña.';
+
+    errorBox
+      .classList
+      .remove('hidden');
+
+    passwordInput.focus();
+
+    return false;
+  }
+
   try{
-    submitButton.disabled = true;
+    submitButton.disabled =
+      true;
+
     submitButton.textContent =
       'Ingresando…';
 
-    const { error } =
-      await supabaseClient
-        .auth
-        .signInWithPassword({
-          email,
-          password
-        });
+    const {
+      data,
+      error
+    } = await supabaseClient
+      .auth
+      .signInWithPassword({
+        email,
+        password
+      });
 
     if(error){
+      console.error(
+        'Error de Supabase Auth:',
+        error
+      );
+
       throw error;
+    }
+
+    if(!data.session){
+      throw new Error(
+        'No se pudo iniciar la sesión.'
+      );
     }
 
     adminAuthed =
@@ -2986,26 +3062,59 @@ async function handleLogin(event){
 
     passwordInput.value = '';
 
+    errorBox
+      .classList
+      .add('hidden');
+
     showAdminDashboard();
+
   }catch(error){
     console.error(
       'No se pudo iniciar sesión:',
       error
     );
 
-    errorBox.textContent =
-      error.message ===
-      'Este usuario no tiene permisos de administradora.'
-        ? error.message
-        : 'Correo o contraseña incorrectos.';
+    adminAuthed = false;
+
+    const message =
+      String(
+        error?.message || ''
+      ).toLowerCase();
+
+    if(
+      message.includes(
+        'email not confirmed'
+      )
+    ){
+      errorBox.textContent =
+        'El correo todavía no está confirmado en Supabase.';
+    }else if(
+      message.includes(
+        'permisos de administradora'
+      )
+    ){
+      errorBox.textContent =
+        'El usuario existe, pero no tiene permisos de administradora.';
+    }else if(
+      message.includes(
+        'invalid login credentials'
+      )
+    ){
+      errorBox.textContent =
+        'El correo o la contraseña no coinciden con el usuario de Supabase.';
+    }else{
+      errorBox.textContent =
+        'No se pudo iniciar sesión. Revisá el correo y la contraseña.';
+    }
 
     errorBox
       .classList
       .remove('hidden');
 
-    adminAuthed = false;
   }finally{
-    submitButton.disabled = false;
+    submitButton.disabled =
+      false;
+
     submitButton.textContent =
       'Ingresar';
   }
@@ -3013,10 +3122,25 @@ async function handleLogin(event){
   return false;
 }
 
+
 async function logoutAdmin(){
-  await supabaseClient
-    .auth
-    .signOut();
+  try{
+    const {
+      error
+    } = await supabaseClient
+      .auth
+      .signOut();
+
+    if(error){
+      throw error;
+    }
+
+  }catch(error){
+    console.error(
+      'No se pudo cerrar la sesión:',
+      error
+    );
+  }
 
   adminAuthed = false;
 
@@ -3037,6 +3161,7 @@ async function logoutAdmin(){
   showAdminLogin();
 }
 
+
 function showAdminDashboard(){
   document
     .getElementById(
@@ -3053,6 +3178,7 @@ function showAdminDashboard(){
     .remove('hidden');
 
   renderAdminNav();
+
   goAdmin('dashboard');
 }
 
