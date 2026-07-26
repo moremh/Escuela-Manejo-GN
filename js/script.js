@@ -3489,8 +3489,8 @@ function renderAdminDashboard(){
         ${
           remindersList.length
             ? `
-              <div class="table-scroll">
-                <table class="admin-table">
+              <div class="table-scroll reminders-scroll">
+                  <table class="admin-table reminders-table">
                   <tr>
                     <th>Alumna</th>
                     <th>Hora</th>
@@ -3522,9 +3522,8 @@ function renderAdminDashboard(){
                             }
                           </td>
 
-                          <td>
-                            <a
-                              class="mini-btn wa"
+                          <td class="reminder-action">
+                            <a class="mini-btn wa"
                               target="_blank"
                               rel="noopener noreferrer"
                               href="${

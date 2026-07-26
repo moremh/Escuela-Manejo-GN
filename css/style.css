@@ -239,3 +239,573 @@
   @media(max-width:400px){
     .cal-day{font-size:10px;}
   }
+
+  /* =========================================================
+   TABLA DE RECORDATORIOS
+   ========================================================= */
+
+.reminders-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.reminders-table {
+  width: 100%;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+
+.reminders-table th,
+.reminders-table td {
+  vertical-align: middle;
+}
+
+.reminders-table th:nth-child(1),
+.reminders-table td:nth-child(1) {
+  width: 25%;
+}
+
+.reminders-table th:nth-child(2),
+.reminders-table td:nth-child(2) {
+  width: 12%;
+  white-space: nowrap;
+}
+
+.reminders-table th:nth-child(3),
+.reminders-table td:nth-child(3) {
+  width: 30%;
+}
+
+.reminders-table .reminder-action {
+  width: 240px;
+  min-width: 240px;
+  text-align: center;
+}
+
+.reminders-table .reminder-action .mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 14px;
+
+  white-space: nowrap;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+
+  box-sizing: border-box;
+}
+
+/* CELULARES */
+
+@media (max-width: 700px) {
+  .reminders-table {
+    min-width: 680px;
+  }
+
+  .reminders-table .reminder-action {
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .reminders-table .reminder-action .mini-btn {
+    font-size: 13px;
+  }
+}
+
+/* =========================================================
+   PANEL ADMINISTRADOR RESPONSIVE
+   ========================================================= */
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+#admin-view,
+#admin-dashboard-screen {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.admin-top {
+  width: 100%;
+}
+
+.admin-top .wrap {
+  width: 100%;
+  max-width: 1200px;
+  padding: 16px 24px;
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+}
+
+.admin-nav {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.admin-main {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  padding: 30px;
+  box-sizing: border-box;
+
+  overflow-x: hidden;
+}
+
+.admin-main > * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-main .panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.admin-main input,
+.admin-main select,
+.admin-main textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   TABLAS DEL PANEL
+   ========================================================= */
+
+.table-scroll {
+  width: 100%;
+  max-width: 100%;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.admin-table input,
+.admin-table textarea,
+.admin-table select {
+  width: 100%;
+  min-width: 120px;
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   FORMULARIOS DEL PANEL
+   ========================================================= */
+
+.inline-form {
+  width: 100%;
+  max-width: 100%;
+
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.inline-form .f {
+  min-width: 0;
+}
+
+.field {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.field label {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.field input,
+.field select,
+.field textarea {
+  display: block;
+
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  padding: 11px 12px;
+  box-sizing: border-box;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+
+/* =========================================================
+   AJUSTES DEL SITIO
+   ========================================================= */
+
+#admin-main .panel .field {
+  display: block;
+  margin-bottom: 18px;
+}
+
+#admin-main .panel .field label {
+  display: block;
+  line-height: 1.35;
+}
+
+#admin-main .panel .field input,
+#admin-main .panel .field textarea {
+  width: 100%;
+}
+
+
+/* =========================================================
+   CELULARES
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .admin-top .wrap {
+    padding: 14px 16px;
+
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-top .brand {
+    width: 100%;
+    font-size: 15px;
+  }
+
+  .admin-top .wrap > div:last-child {
+    width: 100%;
+
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px !important;
+  }
+
+  .admin-top .cta-btn {
+    width: 100%;
+    min-width: 0;
+
+    padding: 10px 8px;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .admin-shell {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-nav {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 14px;
+    box-sizing: border-box;
+
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .admin-nav button {
+    width: 100%;
+    min-width: 0;
+
+    padding: 13px 16px;
+    box-sizing: border-box;
+
+    text-align: left;
+    white-space: normal;
+  }
+
+  .admin-main {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 24px 16px 100px;
+    box-sizing: border-box;
+
+    overflow-x: hidden;
+  }
+
+  .admin-main h2 {
+    font-size: 28px;
+    line-height: 1.15;
+    word-break: normal;
+  }
+
+  .admin-main .lede {
+    font-size: 17px;
+    line-height: 1.45;
+  }
+
+  .admin-main .panel {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 20px 16px;
+    margin-bottom: 20px;
+
+    box-sizing: border-box;
+  }
+
+  .admin-main .panel h3 {
+    font-size: 23px;
+    line-height: 1.2;
+  }
+
+  .inline-form {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .inline-form .f {
+    width: 100%;
+  }
+
+  .inline-form .f input,
+  .inline-form .f select,
+  .inline-form .f textarea {
+    width: 100% !important;
+  }
+
+  .inline-form .mini-btn,
+  .inline-form .cta-btn {
+    width: 100%;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    width: 100%;
+    min-height: 44px;
+
+    font-size: 16px;
+  }
+
+  .field textarea {
+    min-height: 110px;
+  }
+
+  .demo-note {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 16px;
+    box-sizing: border-box;
+
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+
+  /* TABLAS EN CELULAR */
+
+  .table-scroll {
+    width: 100%;
+    max-width: 100%;
+
+    overflow-x: auto;
+    border: 1px solid var(--line);
+  }
+
+  .admin-table {
+    width: max-content;
+    min-width: 700px;
+  }
+
+  .admin-table th,
+  .admin-table td {
+    padding: 12px;
+    white-space: normal;
+  }
+
+  .admin-table td {
+    min-width: 130px;
+  }
+
+  .admin-table th:first-child,
+  .admin-table td:first-child {
+    min-width: 140px;
+  }
+
+  .admin-table .btnrow {
+    min-width: 150px;
+  }
+
+  .admin-table .mini-btn {
+    display: block;
+    width: 100%;
+    margin: 4px 0;
+  }
+
+
+  /* RESEÑAS */
+
+  .admin-table textarea {
+    min-width: 180px;
+    min-height: 80px;
+  }
+
+
+  /* PRECIOS Y PROMOS */
+
+  #price-suelta,
+  #price-curso,
+  [id^="pack-name-"],
+  [id^="pack-classes-"],
+  [id^="pack-price-"],
+  #new-pack-name,
+  #new-pack-classes,
+  #new-pack-price {
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  .promo-card {
+    width: 100%;
+    max-width: 100%;
+
+    padding: 16px;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .promo-card .btnrow {
+    width: 100%;
+
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .promo-card .mini-btn {
+    width: 100%;
+  }
+
+
+  /* AJUSTES */
+
+  #set-wa,
+  #set-ig,
+  #set-zonas,
+  #set-autopropio,
+  #set-requisitos,
+  #set-cancelacion {
+    display: block;
+
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    margin: 0;
+    box-sizing: border-box;
+  }
+
+  #set-zonas,
+  #set-autopropio,
+  #set-requisitos,
+  #set-cancelacion {
+    min-height: 115px;
+  }
+
+  #settings-msg {
+    width: 100%;
+  }
+}
+
+
+/* =========================================================
+   CELULARES MUY ANGOSTOS
+   ========================================================= */
+
+@media (max-width: 420px) {
+
+  .admin-top .wrap > div:last-child {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-main {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .admin-main .panel {
+    padding: 18px 14px;
+  }
+
+  .admin-main h2 {
+    font-size: 25px;
+  }
+
+  .admin-main .lede {
+    font-size: 16px;
+  }
+
+  .admin-nav {
+    padding: 12px;
+  }
+}
