@@ -7189,6 +7189,7 @@ function observationsForStudent(
 }
 
 let studentSearchTerm = '';
+let editingStudentId = null;
 
 function normalizeStudentSearch(
   value
@@ -7510,158 +7511,380 @@ function renderAdminStudents(){
                   >
 
 
-                    <div
-                      style="
-                        display:flex;
-                        justify-content:
-                          space-between;
-                        gap:16px;
-                        flex-wrap:wrap;
-                        align-items:flex-start;
-                      "
-                    >
+                    ${
+                      editingStudentId ===
+                        student.id
+
+                        ? `
+
+                            <div
+                              style="
+                                border:
+                                  1px solid
+                                  var(--line);
+                                border-radius:
+                                  12px;
+                                padding:16px;
+                                background:
+                                  var(--cream-dim);
+                              "
+                            >
+
+                              <h4
+                                style="
+                                  margin-bottom:14px;
+                                "
+                              >
+                                Editar datos de la alumna
+                              </h4>
 
 
-                      <div
-                        style="
-                          flex:1;
-                          min-width:240px;
-                        "
-                      >
+                              <div class="inline-form">
 
-                        <h3
-                          style="
-                            margin-bottom:5px;
-                          "
-                        >
-                          ${
-                            escapeHTML(
-                              student.name
-                            )
-                          }
-                        </h3>
+                                <div class="f">
+
+                                  <label>
+                                    Nombre
+                                  </label>
+
+                                  <input
+                                    id="edit-st-name-${student.id}"
+                                    value="${
+                                      escapeHTML(
+                                        student.name
+                                      )
+                                    }"
+                                  >
+
+                                </div>
 
 
-                        ${
-                          student.phone
+                                <div class="f">
 
-                            ? `
-                                <p
+                                  <label>
+                                    Teléfono
+                                  </label>
+
+                                  <input
+                                    id="edit-st-phone-${student.id}"
+                                    value="${
+                                      escapeHTML(
+                                        student.phone
+                                      )
+                                    }"
+                                  >
+
+                                </div>
+
+
+                                <div class="f">
+
+                                  <label>
+                                    Dirección
+                                  </label>
+
+                                  <input
+                                    id="edit-st-address-${student.id}"
+                                    value="${
+                                      escapeHTML(
+                                        student.address
+                                      )
+                                    }"
+                                  >
+
+                                </div>
+
+
+                                <div class="f">
+
+                                  <label>
+                                    Clases tomadas
+                                  </label>
+
+                                  <input
+                                    id="edit-st-classes-${student.id}"
+                                    type="number"
+                                    min="0"
+                                    value="${
+                                      student.classesTaken
+                                    }"
+                                    style="width:100px;"
+                                  >
+
+                                </div>
+
+
+                                <div class="f">
+
+                                  <label>
+                                    Progreso
+                                  </label>
+
+                                  <input
+                                    id="edit-st-progress-${student.id}"
+                                    value="${
+                                      escapeHTML(
+                                        student.progress
+                                      )
+                                    }"
+                                  >
+
+                                </div>
+
+
+                                <div class="f">
+
+                                  <label>
+                                    Licencia de conducir
+                                  </label>
+
+                                  <label
+                                    style="
+                                      display:flex;
+                                      align-items:center;
+                                      gap:8px;
+                                      margin-top:8px;
+                                      cursor:pointer;
+                                    "
+                                  >
+
+                                    <input
+                                      id="edit-st-license-${student.id}"
+                                      type="checkbox"
+                                      style="width:auto;"
+                                      ${
+                                        student.hasLicense
+                                          ? 'checked'
+                                          : ''
+                                      }
+                                    >
+
+                                    Tiene licencia
+
+                                  </label>
+
+                                </div>
+
+                              </div>
+
+
+                              <div
+                                style="
+                                  display:flex;
+                                  gap:8px;
+                                  flex-wrap:wrap;
+                                  margin-top:14px;
+                                "
+                              >
+
+                                <button
+                                  type="button"
+                                  class="mini-btn ok"
+                                  onclick="
+                                    saveStudentEdits(
+                                      '${student.id}',
+                                      this
+                                    )
+                                  "
+                                >
+                                  Guardar cambios
+                                </button>
+
+
+                                <button
+                                  type="button"
+                                  class="mini-btn"
+                                  onclick="cancelStudentEdit()"
+                                >
+                                  Cancelar
+                                </button>
+
+                              </div>
+
+                            </div>
+
+                          `
+
+                        : `
+
+                            <div
+                              style="
+                                display:flex;
+                                justify-content:
+                                  space-between;
+                                gap:16px;
+                                flex-wrap:wrap;
+                                align-items:flex-start;
+                              "
+                            >
+
+
+                              <div
+                                style="
+                                  flex:1;
+                                  min-width:240px;
+                                "
+                              >
+
+                                <h3
+                                  style="
+                                    margin-bottom:5px;
+                                  "
+                                >
+                                  ${
+                                    escapeHTML(
+                                      student.name
+                                    )
+                                  }
+                                </h3>
+
+
+                                ${
+                                  student.phone
+
+                                    ? `
+                                        <p
+                                          class="note"
+                                          style="
+                                            margin:
+                                              0 0 5px;
+                                          "
+                                        >
+                                          Teléfono:
+                                          ${
+                                            escapeHTML(
+                                              student.phone
+                                            )
+                                          }
+                                        </p>
+                                      `
+
+                                    : ''
+                                }
+
+
+                                ${
+                                  student.address
+
+                                    ? `
+                                        <p
+                                          class="note"
+                                          style="
+                                            margin:
+                                              0 0 5px;
+                                          "
+                                        >
+                                          Dirección:
+                                          ${
+                                            escapeHTML(
+                                              student.address
+                                            )
+                                          }
+                                        </p>
+                                      `
+
+                                    : ''
+                                }
+
+
+                                <label
                                   class="note"
                                   style="
+                                    display:flex;
+                                    align-items:center;
+                                    gap:8px;
                                     margin:
                                       0 0 5px;
+                                    cursor:pointer;
                                   "
                                 >
-                                  Teléfono:
-                                  ${
-                                    escapeHTML(
-                                      student.phone
+
+                                  <input
+                                    type="checkbox"
+                                    style="width:auto;"
+                                    ${
+                                      student.hasLicense
+                                        ? 'checked'
+                                        : ''
+                                    }
+                                    onchange="
+                                      updateStudentLicense(
+                                        '${student.id}',
+                                        this.checked,
+                                        this
+                                      )
+                                    "
+                                  >
+
+                                  Tiene licencia de conducir
+
+                                </label>
+
+
+                                ${
+                                  student.progress
+
+                                    ? `
+                                        <p
+                                          class="note"
+                                          style="
+                                            margin:0;
+                                          "
+                                        >
+                                          Progreso:
+                                          ${
+                                            escapeHTML(
+                                              student.progress
+                                            )
+                                          }
+                                        </p>
+                                      `
+
+                                    : ''
+                                }
+
+                              </div>
+
+
+                              <div
+                                style="
+                                  display:flex;
+                                  gap:8px;
+                                  flex-wrap:wrap;
+                                "
+                              >
+
+                                <button
+                                  type="button"
+                                  class="mini-btn"
+                                  onclick="
+                                    beginStudentEdit(
+                                      '${student.id}'
                                     )
-                                  }
-                                </p>
-                              `
-
-                            : ''
-                        }
-
-
-                        ${
-                          student.address
-
-                            ? `
-                                <p
-                                  class="note"
-                                  style="
-                                    margin:
-                                      0 0 5px;
                                   "
                                 >
-                                  Dirección:
-                                  ${
-                                    escapeHTML(
-                                      student.address
+                                  Editar datos
+                                </button>
+
+
+                                <button
+                                  type="button"
+                                  class="mini-btn no"
+                                  onclick="
+                                    removeStudent(
+                                      '${student.id}'
                                     )
-                                  }
-                                </p>
-                              `
-
-                            : ''
-                        }
-
-
-                        <label
-                          class="note"
-                          style="
-                            display:flex;
-                            align-items:center;
-                            gap:8px;
-                            margin:
-                              0 0 5px;
-                            cursor:pointer;
-                          "
-                        >
-
-                          <input
-                            type="checkbox"
-                            style="width:auto;"
-                            ${
-                              student.hasLicense
-                                ? 'checked'
-                                : ''
-                            }
-                            onchange="
-                              updateStudentLicense(
-                                '${student.id}',
-                                this.checked,
-                                this
-                              )
-                            "
-                          >
-
-                          Tiene licencia de conducir
-
-                        </label>
-
-
-                        ${
-                          student.progress
-
-                            ? `
-                                <p
-                                  class="note"
-                                  style="
-                                    margin:0;
                                   "
                                 >
-                                  Progreso:
-                                  ${
-                                    escapeHTML(
-                                      student.progress
-                                    )
-                                  }
-                                </p>
-                              `
+                                  Eliminar ficha
+                                </button>
 
-                            : ''
-                        }
+                              </div>
 
-                      </div>
+                            </div>
 
-
-                      <button
-                        type="button"
-                        class="mini-btn no"
-                        onclick="
-                          removeStudent(
-                            '${student.id}'
-                          )
-                        "
-                      >
-                        Eliminar ficha
-                      </button>
-
-                    </div>
+                          `
+                    }
 
 
 
@@ -7958,6 +8181,298 @@ function renderAdminStudents(){
   }
 
 }
+
+function beginStudentEdit(
+  studentId
+){
+
+  const student =
+    DB.students.find(
+      item=>
+        item.id === studentId
+    );
+
+  if(!student){
+    return;
+  }
+
+  editingStudentId =
+    studentId;
+
+  renderAdminStudents();
+
+  const nameInput =
+    document.getElementById(
+      'edit-st-name-' +
+      studentId
+    );
+
+  if(nameInput){
+    nameInput.focus();
+    nameInput.select();
+  }
+
+}
+
+
+function cancelStudentEdit(){
+
+  editingStudentId = null;
+
+  renderAdminStudents();
+
+}
+
+
+async function saveStudentEdits(
+  studentId,
+  button
+){
+
+  if(
+    button &&
+    button.disabled
+  ){
+    return;
+  }
+
+
+  const student =
+    DB.students.find(
+      item=>
+        item.id === studentId
+    );
+
+  if(!student){
+    return;
+  }
+
+
+  const nameInput =
+    document.getElementById(
+      'edit-st-name-' +
+      studentId
+    );
+
+  const phoneInput =
+    document.getElementById(
+      'edit-st-phone-' +
+      studentId
+    );
+
+  const addressInput =
+    document.getElementById(
+      'edit-st-address-' +
+      studentId
+    );
+
+  const classesInput =
+    document.getElementById(
+      'edit-st-classes-' +
+      studentId
+    );
+
+  const progressInput =
+    document.getElementById(
+      'edit-st-progress-' +
+      studentId
+    );
+
+  const licenseInput =
+    document.getElementById(
+      'edit-st-license-' +
+      studentId
+    );
+
+
+  if(
+    !nameInput ||
+    !phoneInput ||
+    !addressInput ||
+    !classesInput ||
+    !progressInput ||
+    !licenseInput
+  ){
+    return;
+  }
+
+
+  const name =
+    nameInput.value.trim();
+
+  if(!name){
+
+    alert(
+      'El nombre de la alumna no puede quedar vacío.'
+    );
+
+    nameInput.focus();
+
+    return;
+  }
+
+
+  const phone =
+    phoneInput.value.trim();
+
+  const address =
+    addressInput.value.trim();
+
+  const progress =
+    progressInput.value.trim();
+
+  const hasLicense =
+    licenseInput.checked;
+
+  const classesTaken =
+    Math.max(
+      0,
+      Number(
+        classesInput.value
+      ) || 0
+    );
+
+
+  if(button){
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Guardando...';
+
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('students')
+
+        .update({
+
+          name,
+
+          phone,
+
+          address,
+
+          has_license:
+            hasLicense,
+
+          classes_taken:
+            classesTaken,
+
+          progress,
+
+          updated_at:
+            new Date()
+              .toISOString()
+
+        })
+
+        .eq(
+          'id',
+          studentId
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    /*
+      Algunas tablas guardan también
+      el nombre de la alumna para
+      mostrarlo rápidamente. Si el
+      nombre se corrigió, lo mantenemos
+      sincronizado en esos registros.
+    */
+    if(name !== student.name){
+
+      const [
+        bookingsResult,
+        paymentsResult,
+        duesResult
+      ] = await Promise.all([
+
+        supabaseClient
+          .from('bookings')
+          .update({
+            student_name:name
+          })
+          .eq(
+            'student_id',
+            studentId
+          ),
+
+        supabaseClient
+          .from('payments')
+          .update({
+            student_name:name
+          })
+          .eq(
+            'student_id',
+            studentId
+          ),
+
+        supabaseClient
+          .from('payment_dues')
+          .update({
+            student_name:name
+          })
+          .eq(
+            'student_id',
+            studentId
+          )
+
+      ]);
+
+
+      const relatedError =
+        bookingsResult.error ||
+        paymentsResult.error ||
+        duesResult.error;
+
+      if(relatedError){
+        throw relatedError;
+      }
+
+    }
+
+
+    editingStudentId = null;
+
+    await loadAdminData();
+
+    renderAdminStudents();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudieron guardar los cambios de la alumna.'
+    );
+
+
+    if(button){
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        'Guardar cambios';
+
+    }
+
+  }
+
+}
+
 
 async function addStudent(
   button
