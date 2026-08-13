@@ -467,13 +467,34 @@ function mapGallery(rows){
 
 function mapStudents(rows){
   return rows.map(row=>({
-    id: row.id,
-    name: row.name || '',
-    phone: row.phone || '',
+
+    id:
+      row.id,
+
+    name:
+      row.name || '',
+
+    phone:
+      row.phone || '',
+
+    address:
+      row.address || '',
+
+    hasLicense:
+      Boolean(
+        row.has_license
+      ),
+
     classesTaken:
-      Number(row.classes_taken) || 0,
-    progress: row.progress || ''
+      Number(
+        row.classes_taken
+      ) || 0,
+
+    progress:
+      row.progress || ''
+
   }));
+
 }
 
 function mapMessages(rows){
@@ -7167,6 +7188,97 @@ function observationsForStudent(
     });
 }
 
+let studentSearchTerm = '';
+
+function normalizeStudentSearch(
+  value
+){
+
+  return String(
+    value || ''
+  )
+    .normalize('NFD')
+    .replace(
+      /[\u0300-\u036f]/g,
+      ''
+    )
+    .toLowerCase()
+    .trim();
+
+}
+
+function filterStudentCards(
+  value
+){
+
+  studentSearchTerm =
+    value || '';
+
+  const term =
+    normalizeStudentSearch(
+      studentSearchTerm
+    );
+
+  let visibleCount =
+    0;
+
+  DB.students.forEach(
+    student=>{
+
+      const card =
+        document.getElementById(
+          'student-card-' +
+          student.id
+        );
+
+      if(!card){
+        return;
+      }
+
+      const searchableText =
+        normalizeStudentSearch(
+          [
+            student.name,
+            student.phone,
+            student.address
+          ].join(' ')
+        );
+
+      const matches =
+        !term ||
+        searchableText.includes(
+          term
+        );
+
+      card.style.display =
+        matches
+          ? ''
+          : 'none';
+
+      if(matches){
+        visibleCount++;
+      }
+
+    }
+  );
+
+  const emptyMessage =
+    document.getElementById(
+      'student-search-empty'
+    );
+
+  if(emptyMessage){
+
+    emptyMessage.style.display =
+      term &&
+      visibleCount === 0
+        ? 'block'
+        : 'none';
+
+  }
+
+}
+
 function renderAdminStudents(){
 
   document
@@ -7184,6 +7296,7 @@ function renderAdminStudents(){
         style="margin-bottom:22px;"
       >
         Datos de contacto,
+        dirección, licencia,
         clases tomadas,
         progreso y observaciones
         de cada alumna.
@@ -7228,6 +7341,49 @@ function renderAdminStudents(){
           <div class="f">
 
             <label>
+              Dirección
+            </label>
+
+            <input
+              id="st-address"
+              placeholder="Ej: San Martín 1250"
+            >
+
+          </div>
+
+
+          <div class="f">
+
+            <label>
+              Licencia de conducir
+            </label>
+
+            <label
+              style="
+                display:flex;
+                align-items:center;
+                gap:8px;
+                margin-top:8px;
+                cursor:pointer;
+              "
+            >
+
+              <input
+                id="st-has-license"
+                type="checkbox"
+                style="width:auto;"
+              >
+
+              Tiene licencia
+
+            </label>
+
+          </div>
+
+
+          <div class="f">
+
+            <label>
               Clases tomadas
             </label>
 
@@ -7259,8 +7415,9 @@ function renderAdminStudents(){
 
 
           <button
+            type="button"
             class="mini-btn"
-            onclick="addStudent()"
+            onclick="addStudent(this)"
           >
             Agregar
           </button>
@@ -7268,6 +7425,61 @@ function renderAdminStudents(){
         </div>
 
       </div>
+
+
+      ${
+        DB.students.length
+          ? `
+              <div
+                class="panel"
+                style="
+                  margin-bottom:18px;
+                "
+              >
+
+                <h3>
+                  Buscar alumna
+                </h3>
+
+                <div class="field">
+
+                  <input
+                    id="student-search"
+                    type="search"
+                    placeholder="
+                      Buscar por nombre,
+                      teléfono o dirección...
+                    "
+                    value="${
+                      escapeHTML(
+                        studentSearchTerm
+                      )
+                    }"
+                    oninput="
+                      filterStudentCards(
+                        this.value
+                      )
+                    "
+                  >
+
+                </div>
+
+              </div>
+
+
+              <div
+                id="student-search-empty"
+                class="empty"
+                style="
+                  display:none;
+                  margin-bottom:18px;
+                "
+              >
+                No se encontró ninguna alumna.
+              </div>
+            `
+          : ''
+      }
 
 
       ${
@@ -7290,7 +7502,8 @@ function renderAdminStudents(){
                 return `
 
                   <div
-                    class="panel"
+                    id="student-card-${student.id}"
+                    class="panel student-card"
                     style="
                       margin-bottom:18px;
                     "
@@ -7309,7 +7522,12 @@ function renderAdminStudents(){
                     >
 
 
-                      <div>
+                      <div
+                        style="
+                          flex:1;
+                          min-width:240px;
+                        "
+                      >
 
                         <h3
                           style="
@@ -7349,6 +7567,64 @@ function renderAdminStudents(){
 
 
                         ${
+                          student.address
+
+                            ? `
+                                <p
+                                  class="note"
+                                  style="
+                                    margin:
+                                      0 0 5px;
+                                  "
+                                >
+                                  Dirección:
+                                  ${
+                                    escapeHTML(
+                                      student.address
+                                    )
+                                  }
+                                </p>
+                              `
+
+                            : ''
+                        }
+
+
+                        <label
+                          class="note"
+                          style="
+                            display:flex;
+                            align-items:center;
+                            gap:8px;
+                            margin:
+                              0 0 5px;
+                            cursor:pointer;
+                          "
+                        >
+
+                          <input
+                            type="checkbox"
+                            style="width:auto;"
+                            ${
+                              student.hasLicense
+                                ? 'checked'
+                                : ''
+                            }
+                            onchange="
+                              updateStudentLicense(
+                                '${student.id}',
+                                this.checked,
+                                this
+                              )
+                            "
+                          >
+
+                          Tiene licencia de conducir
+
+                        </label>
+
+
+                        ${
                           student.progress
 
                             ? `
@@ -7374,6 +7650,7 @@ function renderAdminStudents(){
 
 
                       <button
+                        type="button"
                         class="mini-btn no"
                         onclick="
                           removeStudent(
@@ -7414,6 +7691,7 @@ function renderAdminStudents(){
 
 
                         <button
+                          type="button"
                           class="mini-btn no"
                           onclick="
                             changeClasses(
@@ -7446,6 +7724,7 @@ function renderAdminStudents(){
 
 
                         <button
+                          type="button"
                           class="mini-btn ok"
                           onclick="
                             changeClasses(
@@ -7502,19 +7781,24 @@ function renderAdminStudents(){
                         </label>
 
                         <textarea
-  id="student-observation-${student.id}"
-  rows="3"
-  placeholder="Ej: hoy practicó estacionamiento y necesita reforzar el uso de espejos."
-></textarea>
+                          id="student-observation-${student.id}"
+                          rows="3"
+                          placeholder="
+                            Ej: hoy practicó estacionamiento
+                            y necesita reforzar el uso de espejos.
+                          "
+                        ></textarea>
 
                       </div>
 
 
                       <button
+                        type="button"
                         class="mini-btn"
                         onclick="
                           addStudentObservation(
-                            '${student.id}'
+                            '${student.id}',
+                            this
                           )
                         "
                       >
@@ -7551,28 +7835,89 @@ function renderAdminStudents(){
                                   >
 
                                     <div
-                                      class="note"
                                       style="
-                                        margin-bottom:
-                                          6px;
+                                        display:flex;
+                                        justify-content:
+                                          space-between;
+                                        align-items:
+                                          flex-start;
+                                        gap:12px;
+                                        flex-wrap:wrap;
                                       "
                                     >
-                                      ${
-                                        item.date
-                                          ? fmtDateHuman(
-                                              item.date
+
+                                      <div
+                                        style="
+                                          flex:1;
+                                          min-width:220px;
+                                        "
+                                      >
+
+                                        <div
+                                          class="note"
+                                          style="
+                                            margin-bottom:
+                                              6px;
+                                          "
+                                        >
+                                          ${
+                                            item.date
+                                              ? fmtDateHuman(
+                                                  item.date
+                                                )
+                                              : ''
+                                          }
+                                        </div>
+
+
+                                        <div>
+                                          ${
+                                            escapeHTML(
+                                              item.observation
                                             )
-                                          : ''
-                                      }
-                                    </div>
+                                          }
+                                        </div>
+
+                                      </div>
 
 
-                                    <div>
-                                      ${
-                                        escapeHTML(
-                                          item.observation
-                                        )
-                                      }
+                                      <div
+                                        style="
+                                          display:flex;
+                                          gap:6px;
+                                          flex-wrap:wrap;
+                                        "
+                                      >
+
+                                        <button
+                                          type="button"
+                                          class="mini-btn"
+                                          onclick="
+                                            editStudentObservation(
+                                              '${item.id}',
+                                              this
+                                            )
+                                          "
+                                        >
+                                          Editar
+                                        </button>
+
+
+                                        <button
+                                          type="button"
+                                          class="mini-btn no"
+                                          onclick="
+                                            deleteStudentObservation(
+                                              '${item.id}',
+                                              this
+                                            )
+                                          "
+                                        >
+                                          Eliminar
+                                        </button>
+
+                                      </div>
+
                                     </div>
 
                                   </div>
@@ -7605,17 +7950,60 @@ function renderAdminStudents(){
             `
       }
     `;
+
+  if(studentSearchTerm){
+    filterStudentCards(
+      studentSearchTerm
+    );
+  }
+
 }
 
-async function addStudent(){
+async function addStudent(
+  button
+){
+
+  if(
+    button &&
+    button.disabled
+  ){
+    return;
+  }
+
+
+  const nameInput =
+    document.getElementById(
+      'st-name'
+    );
+
+  const phoneInput =
+    document.getElementById(
+      'st-phone'
+    );
+
+  const addressInput =
+    document.getElementById(
+      'st-address'
+    );
+
+  const licenseInput =
+    document.getElementById(
+      'st-has-license'
+    );
+
+  const classesInput =
+    document.getElementById(
+      'st-classes'
+    );
+
+  const progressInput =
+    document.getElementById(
+      'st-progress'
+    );
+
 
   const name =
-    document
-      .getElementById(
-        'st-name'
-      )
-      .value
-      .trim();
+    nameInput.value.trim();
 
 
   if(!name){
@@ -7632,13 +8020,19 @@ async function addStudent(){
     Math.max(
       0,
       Number(
-        document
-          .getElementById(
-            'st-classes'
-          )
-          .value
+        classesInput.value
       ) || 0
     );
+
+
+  if(button){
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Guardando...';
+  }
 
 
   try{
@@ -7653,23 +8047,21 @@ async function addStudent(){
           name,
 
           phone:
-            document
-              .getElementById(
-                'st-phone'
-              )
-              .value
-              .trim(),
+            phoneInput.value.trim(),
+
+          address:
+            addressInput.value.trim(),
+
+          has_license:
+            Boolean(
+              licenseInput.checked
+            ),
 
           classes_taken:
             classesTaken,
 
           progress:
-            document
-              .getElementById(
-                'st-progress'
-              )
-              .value
-              .trim()
+            progressInput.value.trim()
 
         });
 
@@ -7678,6 +8070,9 @@ async function addStudent(){
       throw error;
     }
 
+
+    studentSearchTerm =
+      '';
 
     await loadAdminData();
 
@@ -7691,7 +8086,18 @@ async function addStudent(){
       'No se pudo agregar la alumna.'
     );
 
+
+    if(button){
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        'Agregar';
+    }
+
   }
+
 }
 
 async function changeClasses(
@@ -7718,10 +8124,6 @@ async function changeClasses(
     );
 
 
-  /*
-    Si ya está en cero y se toca -1,
-    no hacemos nada.
-  */
   if(
     newTotal ===
       student.classesTaken
@@ -7774,9 +8176,93 @@ async function changeClasses(
   }
 }
 
-async function addStudentObservation(
-  studentId
+async function updateStudentLicense(
+  studentId,
+  hasLicense,
+  checkbox
 ){
+
+  if(
+    checkbox &&
+    checkbox.disabled
+  ){
+    return;
+  }
+
+
+  if(checkbox){
+    checkbox.disabled =
+      true;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('students')
+
+        .update({
+
+          has_license:
+            hasLicense,
+
+          updated_at:
+            new Date()
+              .toISOString()
+
+        })
+
+        .eq(
+          'id',
+          studentId
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminStudents();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo actualizar el estado de la licencia.'
+    );
+
+
+    if(checkbox){
+
+      checkbox.checked =
+        !hasLicense;
+
+      checkbox.disabled =
+        false;
+    }
+
+  }
+
+}
+
+async function addStudentObservation(
+  studentId,
+  button
+){
+
+  if(
+    button &&
+    button.disabled
+  ){
+    return;
+  }
+
 
   const textarea =
     document.getElementById(
@@ -7801,6 +8287,16 @@ async function addStudentObservation(
     );
 
     return;
+  }
+
+
+  if(button){
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Guardando...';
   }
 
 
@@ -7843,7 +8339,218 @@ async function addStudentObservation(
       'No se pudo guardar la observación.'
     );
 
+
+    if(button){
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        'Agregar observación';
+    }
+
   }
+
+}
+
+async function editStudentObservation(
+  observationId,
+  button
+){
+
+  const item =
+    DB.studentObservations.find(
+      observation=>
+        observation.id ===
+          observationId
+    );
+
+
+  if(!item){
+    return;
+  }
+
+
+  const newText =
+    prompt(
+      'Editar observación:',
+      item.observation
+    );
+
+
+  if(newText === null){
+    return;
+  }
+
+
+  const cleanText =
+    newText.trim();
+
+
+  if(!cleanText){
+
+    alert(
+      'La observación no puede quedar vacía.'
+    );
+
+    return;
+  }
+
+
+  if(
+    cleanText ===
+      item.observation
+  ){
+    return;
+  }
+
+
+  if(button){
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Guardando...';
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from(
+          'student_observations'
+        )
+
+        .update({
+
+          observation:
+            cleanText
+
+        })
+
+        .eq(
+          'id',
+          observationId
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminStudents();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo editar la observación.'
+    );
+
+
+    if(button){
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        'Editar';
+    }
+
+  }
+
+}
+
+async function deleteStudentObservation(
+  observationId,
+  button
+){
+
+  const item =
+    DB.studentObservations.find(
+      observation=>
+        observation.id ===
+          observationId
+    );
+
+
+  if(!item){
+    return;
+  }
+
+
+  if(
+    !confirm(
+      '¿Querés eliminar esta observación?'
+    )
+  ){
+    return;
+  }
+
+
+  if(button){
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Eliminando...';
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from(
+          'student_observations'
+        )
+
+        .delete()
+
+        .eq(
+          'id',
+          observationId
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminStudents();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo eliminar la observación.'
+    );
+
+
+    if(button){
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        'Eliminar';
+    }
+
+  }
+
 }
 
 async function removeStudent(id){
