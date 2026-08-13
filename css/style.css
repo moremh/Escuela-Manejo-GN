@@ -1928,3 +1928,86 @@ table.admin-table td,
     font-size: 15px;
   }
 }
+
+/* ================================================================
+   INDICADORES DE AGENDA ADMIN
+   ================================================================ */
+
+.cal-day{
+  position:relative;
+}
+
+.admin-cal-markers{
+  position:absolute;
+
+  left:50%;
+  bottom:4px;
+
+  transform:translateX(-50%);
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  gap:3px;
+}
+
+.admin-cal-marker{
+  min-width:18px;
+  height:18px;
+
+  padding:0 4px;
+
+  border-radius:999px;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  font-size:10px;
+  font-weight:700;
+
+  color:white;
+
+  line-height:1;
+}
+
+
+/* Solicitudes pendientes */
+
+.admin-cal-marker.pending-booking{
+  background:#e8a33d;
+
+  animation:
+    agendaPendingPulse
+    1.4s
+    ease-in-out
+    infinite;
+}
+
+
+/* Clases confirmadas */
+
+.admin-cal-marker.confirmed-booking{
+  background:#5f8f70;
+}
+
+
+@keyframes agendaPendingPulse{
+
+  0%,
+  100%{
+    transform:scale(1);
+    box-shadow:
+      0 0 0 0
+      rgba(232,163,61,.35);
+  }
+
+  50%{
+    transform:scale(1.12);
+    box-shadow:
+      0 0 0 5px
+      rgba(232,163,61,0);
+  }
+
+}

@@ -29,11 +29,6 @@ const MONTHS = [
   'Diciembre'
 ];
 
-const SERVICE_LABELS = {
-  suelta: 'Clase suelta de perfeccionamiento',
-  curso: 'Curso integral - Mi Primera Licencia'
-};
-
 function uid(prefix){
   return (
     prefix +
@@ -61,6 +56,153 @@ function fmtMoney(number){
     '$' +
     Number(number).toLocaleString('es-AR')
   );
+}
+
+function formatMoneyInputValue(value){
+
+  if(
+    value === null ||
+    value === undefined ||
+    value === ''
+  ){
+    return '';
+  }
+
+
+  /*
+    Si viene directamente de Supabase
+    como número, lo mostramos con
+    formato argentino.
+  */
+  if(typeof value === 'number'){
+
+    return value.toLocaleString(
+      'es-AR',
+      {
+        minimumFractionDigits:0,
+        maximumFractionDigits:2
+      }
+    );
+  }
+
+
+  let text =
+    String(value)
+      .replace(/[^\d,.]/g, '');
+
+
+  /*
+    Quitamos los puntos anteriores
+    para volver a calcular los miles.
+  */
+  text =
+    text.replace(/\./g, '');
+
+
+  const hasComma =
+    text.includes(',');
+
+
+  let [
+    integerPart,
+    decimalPart = ''
+  ] = text.split(',');
+
+
+  /*
+    Evita cosas como 00015.000
+  */
+  integerPart =
+    integerPart.replace(
+      /^0+(?=\d)/,
+      ''
+    );
+
+
+  const formattedInteger =
+    integerPart.replace(
+      /\B(?=(\d{3})+(?!\d))/g,
+      '.'
+    );
+
+
+  if(hasComma){
+
+    decimalPart =
+      decimalPart
+        .replace(/\D/g, '')
+        .slice(0, 2);
+
+    return (
+      formattedInteger +
+      ',' +
+      decimalPart
+    );
+  }
+
+
+  return formattedInteger;
+}
+
+
+function formatMoneyField(input){
+
+  input.value =
+    formatMoneyInputValue(
+      input.value
+    );
+}
+
+
+function parseMoneyInput(value){
+
+  if(
+    value === null ||
+    value === undefined ||
+    String(value).trim() === ''
+  ){
+    return null;
+  }
+
+
+  const normalized =
+    String(value)
+
+      /*
+        Dejamos solamente números,
+        puntos y coma.
+      */
+      .replace(
+        /[^\d,.]/g,
+        ''
+      )
+
+      /*
+        Los puntos son separadores
+        de miles.
+      */
+      .replace(
+        /\./g,
+        ''
+      )
+
+      /*
+        La coma argentina pasa a
+        punto decimal para JavaScript.
+      */
+      .replace(
+        ',',
+        '.'
+      );
+
+
+  const number =
+    Number(normalized);
+
+
+  return Number.isFinite(number)
+    ? number
+    : null;
 }
 
 function fmtDateHuman(iso){
@@ -135,43 +277,29 @@ function waLink(phone, text){
 
 function defaultDB(){
   return {
-    services: {
-      suelta: {
-        price: 12000,
-        desc:
-          'Clase de perfeccionamiento individual de 45 minutos, en el auto de la alumna.'
-      },
-
-      curso: {
-        price: 130000,
-        desc:
-          'Preparación teórica para el examen + práctica de manejo completa, a tu ritmo.'
-      },
-
-      packs: []
+    services:[],
+    promos:[],
+    settings:{
+      whatsapp:'',
+      instagram:'',
+      zonas:'',
+      requisitos:'',
+      autoPropio:'',
+      cancelacion:''
     },
-
-    promos: [],
-
-    settings: {
-      whatsapp: '',
-      instagram: '',
-      zonas: '',
-      requisitos: '',
-      autoPropio: '',
-      cancelacion: ''
-    },
-
-    schedule: {
-      availability: {},
-      blocked: {}
-    },
-
-    bookings: [],
-    students: [],
-    reviews: [],
-    messages: [],
-    gallery: []
+    schedule:{
+  blocked:{}
+},
+    bookings:[],
+    students:[],
+    reviews:[],
+    messages:[],
+    gallery:[],
+    studentObservations:[],
+    payments:[],
+    paymentDues:[],
+    weeklyAvailability:[],
+    dateOverrides:[]
   };
 }
 
@@ -196,77 +324,26 @@ function requireNoError(result, label){
 }
 
 function mapServices(rows){
-  const result = defaultDB().services;
+  return rows.map(row=>({
+    id:row.id,
+    name:row.name || '',
+    type:row.service_type || 'class',
 
-  rows.forEach(row=>{
-    const item = {
-      id: row.id,
-      name: row.name,
-      classes: row.classes,
-      price: Number(row.price) || 0,
-      desc: row.description || ''
-    };
+    classes:
+      row.classes === null ||
+      row.classes === undefined
+        ? null
+        : Number(row.classes),
 
-    if(
-      row.id === 'suelta' ||
-      row.service_type === 'single'
-    ){
-      result.suelta = {
-        price: item.price,
-        desc: item.desc
-      };
+    price:
+      row.price === null ||
+      row.price === undefined
+        ? null
+        : Number(row.price),
 
-      return;
-    }
-
-    if(
-      row.id === 'curso' ||
-      row.service_type === 'course'
-    ){
-      result.curso = {
-        price: item.price,
-        desc: item.desc
-      };
-
-      return;
-    }
-
-    if(row.service_type === 'pack'){
-      result.packs.push(item);
-    }
-  });
-
-  result.packs.sort(
-    (a, b)=>
-      (a.classes || 0) -
-      (b.classes || 0)
-  );
-
-  return result;
-}
-
-function mapAvailability(rows){
-  const availability = {};
-
-  rows.forEach(row=>{
-    const date = row.class_date;
-    const time = shortTime(
-      row.class_time
-    );
-
-    if(!availability[date]){
-      availability[date] = [];
-    }
-
-    if(
-      !availability[date].includes(time)
-    ){
-      availability[date].push(time);
-      availability[date].sort();
-    }
-  });
-
-  return availability;
+    desc:row.description || '',
+    active:row.active !== false
+  }));
 }
 
 function mapBlockedDays(rows){
@@ -279,11 +356,8 @@ function mapBlockedDays(rows){
   return blocked;
 }
 
-function mapBookings(
-  rows,
-  publicOnly = false
-){
-  return rows.map((row, index)=>({
+function mapBookings(rows, publicOnly=false){
+  return rows.map((row,index)=>({
     id:
       row.id ||
       (
@@ -295,27 +369,72 @@ function mapBookings(
         index
       ),
 
-    date: row.class_date,
-    time: shortTime(row.class_time),
+    date:
+  row.class_date,
 
-    name: publicOnly
-      ? ''
-      : (row.student_name || ''),
+time:
+  shortTime(
+    row.class_time
+  ),
 
-    phone: publicOnly
-      ? ''
-      : (row.phone || ''),
+preferredTime:
+  publicOnly
+    ? ''
+    : shortTime(
+        row.preferred_time
+      ),
 
-    service: publicOnly
-      ? ''
-      : (row.service_id || ''),
+    name:
+      publicOnly
+        ? ''
+        : (row.student_name || ''),
 
-    status: publicOnly
-      ? 'confirmed'
-      : (row.status || 'pending'),
+    phone:
+      publicOnly
+        ? ''
+        : (row.phone || ''),
 
-    createdAt:
-      row.created_at || null
+    studentId:
+      publicOnly
+        ? null
+        : (row.student_id || null),
+
+    service:
+      publicOnly
+        ? ''
+        : (row.service_id || ''),
+
+    serviceName:
+      publicOnly
+        ? ''
+        : (row.service_name || ''),
+
+    source:
+      publicOnly
+        ? 'web'
+        : (row.booking_source || 'web'),
+
+    attendanceStatus:
+      publicOnly
+        ? 'scheduled'
+        : (row.attendance_status || 'scheduled'),
+
+    attendanceCounted:
+      publicOnly
+        ? false
+        : !!row.attendance_counted,
+
+    adminNote:
+      publicOnly
+        ? ''
+        : (row.admin_note || ''),
+
+    status:
+      publicOnly
+        ? 'confirmed'
+        : (row.status || 'pending'),
+
+    createdAt:row.created_at || null
   }));
 }
 
@@ -442,24 +561,6 @@ async function loadRemoteData(
       .maybeSingle(),
 
     supabaseClient
-      .from('availability')
-      .select(
-        'class_date,class_time'
-      )
-      .gte(
-        'class_date',
-        today
-      )
-      .order(
-        'class_date',
-        { ascending: true }
-      )
-      .order(
-        'class_time',
-        { ascending: true }
-      ),
-
-    supabaseClient
       .from('blocked_days')
       .select('class_date')
       .gte(
@@ -540,43 +641,40 @@ async function loadRemoteData(
   const settingsRow =
     results[2].data || {};
 
-  const availabilityRows =
-    requireNoError(
-      results[3],
-      'No se pudieron cargar los horarios'
-    );
-
   const blockedRows =
     requireNoError(
-      results[4],
+      results[3],
       'No se pudieron cargar los días bloqueados'
     );
 
   const reviewsRows =
     requireNoError(
-      results[5],
+      results[4],
       'No se pudieron cargar las reseñas'
     );
 
   const galleryRows =
     requireNoError(
-      results[6],
+      results[5],
       'No se pudo cargar la galería'
     );
 
-  DB.services =
-    mapServices(servicesRows);
+  DB.services = mapServices(servicesRows);
 
-  DB.promos =
-    promosRows.map(row=>({
-      id: row.id,
-      title: row.title || '',
-      desc:
-        row.description || '',
-      badge: row.badge || '',
-      active:
-        row.active !== false
-    }));
+DB.promos = promosRows.map(row=>({
+  id:row.id,
+  title:row.title || '',
+  desc:row.description || '',
+  badge:row.badge || '',
+
+  price:
+    row.price === null ||
+    row.price === undefined
+      ? null
+      : Number(row.price),
+
+  active:row.active !== false
+}));
 
   DB.settings = {
     whatsapp:
@@ -600,11 +698,6 @@ async function loadRemoteData(
   };
 
   DB.schedule = {
-    availability:
-      mapAvailability(
-        availabilityRows
-      ),
-
     blocked:
       mapBlockedDays(
         blockedRows
@@ -621,7 +714,7 @@ async function loadRemoteData(
     DB.bookings =
       mapBookings(
         requireNoError(
-          results[7],
+          results[6],
           'No se pudieron cargar las reservas'
         )
       );
@@ -629,7 +722,7 @@ async function loadRemoteData(
     DB.students =
       mapStudents(
         requireNoError(
-          results[8],
+          results[7],
           'No se pudieron cargar las alumnas'
         )
       );
@@ -637,7 +730,7 @@ async function loadRemoteData(
     DB.messages =
       mapMessages(
         requireNoError(
-          results[9],
+          results[8],
           'No se pudieron cargar los mensajes'
         )
       );
@@ -645,7 +738,7 @@ async function loadRemoteData(
     DB.bookings =
       mapBookings(
         requireNoError(
-          results[7],
+          results[6],
           'No se pudieron consultar los turnos ocupados'
         ),
         true
@@ -654,6 +747,218 @@ async function loadRemoteData(
     DB.students = [];
     DB.messages = [];
   }
+
+  const [
+  weeklyAvailabilityResult,
+  dateOverridesResult
+] = await Promise.all([
+
+  supabaseClient
+    .from('weekly_availability')
+    .select('*')
+    .order('day_of_week', {
+      ascending:true
+    })
+    .order('start_time', {
+      ascending:true
+    }),
+
+  supabaseClient
+    .from('date_availability_overrides')
+    .select('*')
+    .gte('class_date', today)
+    .order('class_date', {
+      ascending:true
+    })
+    .order('start_time', {
+      ascending:true
+    })
+
+]);
+
+DB.weeklyAvailability =
+  requireNoError(
+    weeklyAvailabilityResult,
+    'No se pudieron cargar los horarios habituales'
+  )
+  .map(row=>({
+    id:row.id,
+    dayOfWeek:Number(row.day_of_week),
+    startTime:shortTime(row.start_time),
+    endTime:shortTime(row.end_time)
+  }));
+
+DB.dateOverrides =
+  requireNoError(
+    dateOverridesResult,
+    'No se pudieron cargar las excepciones de horarios'
+  )
+  .map(row=>({
+    id:row.id,
+    date:row.class_date,
+    startTime:shortTime(row.start_time),
+    endTime:shortTime(row.end_time)
+  }));
+
+  if(includePrivate){
+
+  const observationsResult =
+    await supabaseClient
+      .from('student_observations')
+      .select('*')
+      .order(
+        'observation_date',
+        { ascending:false }
+      )
+      .order(
+        'created_at',
+        { ascending:false }
+      );
+
+
+  DB.studentObservations =
+    requireNoError(
+      observationsResult,
+      'No se pudieron cargar las observaciones'
+    )
+    .map(row=>({
+
+      id:
+        row.id,
+
+      studentId:
+        row.student_id,
+
+      observation:
+        row.observation || '',
+
+      date:
+        row.observation_date,
+
+      createdAt:
+        row.created_at
+
+    }));
+
+}else{
+
+  DB.studentObservations = [];
+
+}
+  
+  if(includePrivate){
+
+  const [
+    paymentsResult,
+    duesResult
+  ] = await Promise.all([
+
+    supabaseClient
+      .from('payments')
+      .select('*')
+      .order(
+        'payment_date',
+        { ascending:false }
+      )
+      .order(
+        'created_at',
+        { ascending:false }
+      ),
+
+    supabaseClient
+      .from('payment_dues')
+      .select('*')
+      .order(
+        'due_date',
+        { ascending:false }
+      )
+      .order(
+        'created_at',
+        { ascending:false }
+      )
+
+  ]);
+
+
+  DB.payments =
+    requireNoError(
+      paymentsResult,
+      'No se pudieron cargar los pagos'
+    )
+    .map(row=>({
+
+      id:
+        row.id,
+
+      studentId:
+        row.student_id,
+
+      studentName:
+        row.student_name || '',
+
+      amount:
+        Number(row.amount) || 0,
+
+      method:
+        row.payment_method || '',
+
+      date:
+        row.payment_date,
+
+      description:
+        row.description || '',
+
+      createdAt:
+        row.created_at
+
+    }));
+
+
+  DB.paymentDues =
+    requireNoError(
+      duesResult,
+      'No se pudieron cargar los saldos pendientes'
+    )
+    .map(row=>({
+
+      id:
+        row.id,
+
+      studentId:
+        row.student_id,
+
+      studentName:
+        row.student_name || '',
+
+      amount:
+        Number(row.amount) || 0,
+
+      description:
+        row.description || '',
+
+      date:
+        row.due_date,
+
+      status:
+        row.status || 'pending',
+
+      resolvedAt:
+        row.resolved_at,
+
+      paymentId:
+        row.payment_id,
+
+      createdAt:
+        row.created_at
+
+    }));
+
+}else{
+
+  DB.payments = [];
+  DB.paymentDues = [];
+
+}
 
   dbReady = true;
 }
@@ -669,51 +974,125 @@ async function loadAdminData(){
 }
 
 async function refreshPublicSchedule(){
-  const today = todayISO();
+
+  const today =
+    todayISO();
+
 
   const [
-    availabilityResult,
+    weeklyResult,
+    overridesResult,
     blockedResult,
     bookedResult
   ] = await Promise.all([
-    supabaseClient
-      .from('availability')
-      .select(
-        'class_date,class_time'
-      )
-      .gte(
-        'class_date',
-        today
-      )
-      .order(
-        'class_date',
-        { ascending: true }
-      )
-      .order(
-        'class_time',
-        { ascending: true }
-      ),
 
     supabaseClient
-      .from('blocked_days')
-      .select('class_date')
+      .from(
+        'weekly_availability'
+      )
+      .select('*')
+      .order(
+        'day_of_week',
+        { ascending:true }
+      )
+      .order(
+        'start_time',
+        { ascending:true }
+      ),
+
+
+    supabaseClient
+      .from(
+        'date_availability_overrides'
+      )
+      .select('*')
+      .gte(
+        'class_date',
+        today
+      )
+      .order(
+        'class_date',
+        { ascending:true }
+      )
+      .order(
+        'start_time',
+        { ascending:true }
+      ),
+
+
+    supabaseClient
+      .from(
+        'blocked_days'
+      )
+      .select(
+        'class_date'
+      )
       .gte(
         'class_date',
         today
       ),
+
 
     supabaseClient.rpc(
       'get_booked_slots'
     )
+
   ]);
 
-  DB.schedule.availability =
-    mapAvailability(
-      requireNoError(
-        availabilityResult,
-        'No se pudieron actualizar los horarios'
-      )
-    );
+
+  DB.weeklyAvailability =
+    requireNoError(
+      weeklyResult,
+      'No se pudieron actualizar los horarios habituales'
+    )
+    .map(row=>({
+
+      id:
+        row.id,
+
+      dayOfWeek:
+        Number(
+          row.day_of_week
+        ),
+
+      startTime:
+        shortTime(
+          row.start_time
+        ),
+
+      endTime:
+        shortTime(
+          row.end_time
+        )
+
+    }));
+
+
+  DB.dateOverrides =
+    requireNoError(
+      overridesResult,
+      'No se pudieron actualizar los horarios especiales'
+    )
+    .map(row=>({
+
+      id:
+        row.id,
+
+      date:
+        row.class_date,
+
+      startTime:
+        shortTime(
+          row.start_time
+        ),
+
+      endTime:
+        shortTime(
+          row.end_time
+        )
+
+    }));
+
 
   DB.schedule.blocked =
     mapBlockedDays(
@@ -722,6 +1101,7 @@ async function refreshPublicSchedule(){
         'No se pudieron actualizar los días bloqueados'
       )
     );
+
 
   DB.bookings =
     mapBookings(
@@ -1075,163 +1455,121 @@ function wheelSVG(){
    ================================================================== */
 
 function renderServicesPublic(){
-  const services = DB.services;
-
+  const services = DB.services || [];
   const activePromos =
-    DB.promos.filter(
-      promo=>promo.active
-    );
+    (DB.promos || []).filter(p=>p.active);
 
-  document
-    .getElementById(
-      'services-cards'
-    )
-    .innerHTML = `
-      <div class="grid3">
+  document.getElementById(
+    'services-cards'
+  ).innerHTML = services.length ? `
+    <div class="grid3">
+
+      ${services.map(service=>`
         <div class="card">
-          <h3>Clase suelta</h3>
-
-          <p>
-            ${services.suelta.desc}
-          </p>
-
-          <div class="price">
-            ${fmtMoney(
-              services.suelta.price
-            )}
-
-            <small>/ clase</small>
-          </div>
-
-          <button
-            class="cta-btn small"
-            onclick="goPublic('reservas')"
-          >
-            Reservar clase
-          </button>
-        </div>
-
-        ${
-          services.packs
-            .map(pack=>`
-              <div class="card">
-                <span class="pack-tag">
-                  ${pack.classes} clases
-                </span>
-
-                <h3>
-                  ${escapeHTML(pack.name)}
-                </h3>
-
-                <p>
-                  Ideal si querés practicar seguido
-                  y afianzar la confianza al volante.
-                </p>
-
-                <div class="price">
-                  ${fmtMoney(pack.price)}
-                </div>
-
-                <button
-                  class="cta-btn small"
-                  onclick="goPublic('reservas')"
-                >
-                  Reservar clase
-                </button>
-              </div>
-            `)
-            .join('')
-        }
-      </div>
-
-      <div
-        class="grid3"
-        style="margin-top:20px;"
-      >
-        <div
-          class="card"
-          style="grid-column:1/-1;"
-        >
-          <span
-            class="pack-tag"
-            style="
-              background:var(--brick-dim);
-              color:var(--brick);
-            "
-          >
-            Curso integral
-          </span>
 
           <h3>
-            Mi Primera Licencia
-          </h3>
-
-          <p>
-            ${services.curso.desc}
-          </p>
-
-          <div class="price">
-            ${fmtMoney(
-              services.curso.price
-            )}
-          </div>
-
-          <button
-            class="cta-btn small"
-            onclick="goPublic('reservas')"
-          >
-            Reservar clase
-          </button>
-        </div>
-      </div>
-    `;
-
-  document
-    .getElementById(
-      'promos-strip'
-    )
-    .innerHTML =
-      activePromos.length
-        ? `
-          <h3 style="margin-bottom:14px;">
-            Promos activas
+            ${escapeHTML(service.name)}
           </h3>
 
           ${
-            activePromos
-              .map(promo=>`
-                <div class="promo-card">
-                  <div>
-                    <h4>
-                      ${escapeHTML(
-                        promo.title
-                      )}
-                    </h4>
-
-                    <p>
-                      ${escapeHTML(
-                        promo.desc
-                      )}
-                    </p>
-                  </div>
-
-                  ${
-                    promo.badge
-                      ? `
-                        <span class="promo-badge">
-                          ${escapeHTML(
-                            promo.badge
-                          )}
-                        </span>
-                      `
-                      : ''
-                  }
-                </div>
-              `)
-              .join('')
+            service.desc
+              ? `
+                <p>
+                  ${escapeHTML(service.desc)}
+                </p>
+              `
+              : ''
           }
-        `
-        : '';
+
+          ${
+            service.price !== null
+              ? `
+                <div class="price">
+                  ${fmtMoney(service.price)}
+                </div>
+              `
+              : `
+                <div class="note">
+                  Consultá el precio
+                </div>
+              `
+          }
+
+          <button
+            class="cta-btn small"
+            onclick="goPublic('reservas')"
+          >
+            Reservar clase
+          </button>
+
+        </div>
+      `).join('')}
+
+    </div>
+  ` : `
+    <div class="empty">
+      Todavía no hay clases disponibles
+      para mostrar.
+    </div>
+  `;
+
+
+  document.getElementById(
+    'promos-strip'
+  ).innerHTML = activePromos.length ? `
+
+    <h3 style="margin-bottom:14px;">
+      Promos activas
+    </h3>
+
+    ${activePromos.map(p=>`
+      <div class="promo-card">
+
+        <div>
+
+          <h4>
+            ${escapeHTML(p.title)}
+          </h4>
+
+          ${
+            p.desc
+              ? `
+                <p>
+                  ${escapeHTML(p.desc)}
+                </p>
+              `
+              : ''
+          }
+
+          ${
+            p.price !== null
+              ? `
+                <div
+                  class="price"
+                  style="margin-top:8px;"
+                >
+                  ${fmtMoney(p.price)}
+                </div>
+              `
+              : ''
+          }
+
+        </div>
+
+        ${
+          p.badge
+            ? `
+              <span class="promo-badge">
+                ${escapeHTML(p.badge)}
+              </span>
+            `
+            : ''
+        }
+
+      </div>
+    `).join('')}
+
+  ` : '';
 }
 
 /* ==================================================================
@@ -1241,7 +1579,8 @@ function renderServicesPublic(){
 let pubMonthOffset = 0;
 let pubSelectedDate = null;
 let pubSelectedTime = null;
-
+let pubPreferredTime = null;
+let pubTimeMode = null;
 function monthGridDates(offset){
   const now = new Date();
 
@@ -1302,30 +1641,235 @@ function monthGridDates(offset){
   };
 }
 
+function timeToMinutes(time){
+  const [hours, minutes] =
+    String(time)
+      .split(':')
+      .map(Number);
+
+  return (
+    hours * 60 +
+    minutes
+  );
+}
+
+function minutesToTime(minutes){
+  const hours =
+    Math.floor(minutes / 60);
+
+  const mins =
+    minutes % 60;
+
+  return (
+    String(hours).padStart(2, '0') +
+    ':' +
+    String(mins).padStart(2, '0')
+  );
+}
+
+function createSlotsFromRanges(ranges){
+
+  const slots = [];
+
+  ranges.forEach(range=>{
+
+    const start =
+      timeToMinutes(
+        range.startTime
+      );
+
+    const end =
+      timeToMinutes(
+        range.endTime
+      );
+
+    for(
+      let current = start;
+      current <= end;
+      current += 30
+    ){
+
+      const time =
+        minutesToTime(current);
+
+      if(!slots.includes(time)){
+        slots.push(time);
+      }
+    }
+
+    /*
+      El horario final siempre se incluye,
+      incluso si el rango no coincide
+      exactamente con saltos de 30 minutos.
+
+      Ej:
+      09:10 - 12:00
+      también permite elegir 12:00.
+    */
+    if(
+      range.endTime &&
+      !slots.includes(range.endTime)
+    ){
+      slots.push(range.endTime);
+    }
+
+  });
+
+  return slots.sort();
+}
+
+function getScheduleRangesForDate(iso){
+
+  if(
+    DB.schedule.blocked[iso]
+  ){
+    return [];
+  }
+
+  /*
+    Si hay horarios especiales para esa fecha,
+    reemplazan al horario semanal.
+  */
+  const overrides =
+    (DB.dateOverrides || [])
+      .filter(item=>
+        item.date === iso
+      );
+
+  if(overrides.length){
+    return overrides;
+  }
+
+
+  /*
+    Usamos T12:00 para evitar problemas
+    de zona horaria al calcular el día.
+  */
+  const date =
+    new Date(
+      iso + 'T12:00:00'
+    );
+
+  const dayOfWeek =
+    date.getDay();
+
+  return (
+    DB.weeklyAvailability || []
+  ).filter(item=>
+    item.dayOfWeek === dayOfWeek
+  );
+}
+
+function scheduleSlotsForDate(iso){
+
+  return createSlotsFromRanges(
+    getScheduleRangesForDate(iso)
+  );
+}
+
+function bookingOccupiesSlot(booking){
+
+  return (
+    booking.status === 'pending' ||
+    booking.status === 'confirmed'
+  );
+}
+
+function bookingIsActive(
+  booking
+){
+
+  return (
+    booking.status ===
+      'pending' ||
+
+    booking.status ===
+      'confirmed'
+  );
+
+}
+
+
+function bookingEffectiveTime(
+  booking
+){
+
+  return (
+    booking.time ||
+    booking.preferredTime ||
+    ''
+  );
+
+}
+
+
+function isTimeOccupied(
+  iso,
+  time,
+  excludeBookingId = null
+){
+
+  return DB.bookings.some(
+    booking=>
+
+      booking.date === iso &&
+
+      booking.id !==
+        excludeBookingId &&
+
+      bookingIsActive(
+        booking
+      ) &&
+
+      bookingEffectiveTime(
+        booking
+      ) === time
+  );
+
+}
+
 function slotsLeft(
   iso,
   excludeBookingId
 ){
+
   const all =
-    DB.schedule
-      .availability[iso] || [];
+    scheduleSlotsForDate(
+      iso
+    );
+
 
   const taken =
     DB.bookings
-      .filter(booking=>
-        booking.date === iso &&
-        booking.status !==
-          'cancelled' &&
-        booking.id !==
-          excludeBookingId
+
+      .filter(
+        booking=>
+
+          booking.date === iso &&
+
+          bookingIsActive(
+            booking
+          ) &&
+
+          booking.id !==
+            excludeBookingId
       )
+
       .map(
-        booking=>booking.time
+        booking=>
+          bookingEffectiveTime(
+            booking
+          )
       );
 
+
   return all.filter(
-    time=>!taken.includes(time)
+    time=>
+      !taken.includes(
+        time
+      )
   );
+
 }
 
 function renderCalendarPublic(){
@@ -1339,12 +1883,17 @@ function renderCalendarPublic(){
       },
 
       onPick: iso=>{
-        pubSelectedDate = iso;
-        pubSelectedTime = null;
 
-        renderSlotPanel();
-        renderCalendarPublic();
-      },
+  pubSelectedDate = iso;
+
+  pubSelectedTime = null;
+  pubPreferredTime = null;
+  pubTimeMode = null;
+
+  renderSlotPanel();
+  renderCalendarPublic();
+
+},
 
       selected:
         pubSelectedDate,
@@ -1421,11 +1970,33 @@ function buildCalendar(
                   .blocked[iso]
               );
 
-            const hasAvailability =
-              Boolean(
-                DB.schedule
-                  .availability[iso]
-              );
+            const availableSlots =
+  scheduleSlotsForDate(iso);
+
+const hasAvailability =
+  availableSlots.length > 0;
+
+            const adminBookingsDay =
+  options.mode === 'admin'
+    ? DB.bookings.filter(
+        booking=>
+          booking.date === iso
+      )
+    : [];
+
+
+const pendingBookings =
+  adminBookingsDay.filter(
+    booking=>
+      booking.status === 'pending'
+  ).length;
+
+
+const confirmedBookings =
+  adminBookingsDay.filter(
+    booking=>
+      booking.status === 'confirmed'
+  ).length;
 
             const free =
               hasAvailability
@@ -1489,13 +2060,81 @@ function buildCalendar(
                 ${date.getDate()}
 
                 ${
-                  hasAvailability &&
-                  !isPast
-                    ? `
-                      <span class="dot"></span>
-                    `
-                    : ''
-                }
+  options.mode === 'admin' &&
+  (
+    pendingBookings > 0 ||
+    confirmedBookings > 0
+  )
+    ? `
+        <div class="admin-cal-markers">
+
+          ${
+            pendingBookings > 0
+              ? `
+                  <span
+                    class="
+                      admin-cal-marker
+                      pending-booking
+                    "
+                    title="${
+                      pendingBookings
+                    } solicitud${
+                      pendingBookings === 1
+                        ? ''
+                        : 'es'
+                    } pendiente${
+                      pendingBookings === 1
+                        ? ''
+                        : 's'
+                    }"
+                  >
+                    ${pendingBookings}
+                  </span>
+                `
+              : ''
+          }
+
+
+          ${
+            confirmedBookings > 0
+              ? `
+                  <span
+                    class="
+                      admin-cal-marker
+                      confirmed-booking
+                    "
+                    title="${
+                      confirmedBookings
+                    } clase${
+                      confirmedBookings === 1
+                        ? ''
+                        : 's'
+                    } confirmada${
+                      confirmedBookings === 1
+                        ? ''
+                        : 's'
+                    }"
+                  >
+                    ${confirmedBookings}
+                  </span>
+                `
+              : ''
+          }
+
+        </div>
+      `
+    : ''
+}
+
+                ${
+  options.mode !== 'admin' &&
+  hasAvailability &&
+  !isPast
+    ? `
+        <span class="dot"></span>
+      `
+    : ''
+}
               </button>
             `;
           })
@@ -1544,128 +2183,410 @@ function buildCalendar(
 }
 
 function renderSlotPanel(){
+
   const panel =
     document.getElementById(
       'slot-panel'
     );
 
+
   if(!panel){
     return;
   }
 
+
   if(!pubSelectedDate){
+
     panel.innerHTML = `
-      <h3>Elegí un día</h3>
+
+      <h3>
+        Elegí un día
+      </h3>
 
       <p
         class="lede"
         style="margin:0;"
       >
-        Tocá una fecha con turnos libres
-        en el calendario para ver los
-        horarios disponibles.
+        Elegí una fecha en el calendario
+        para solicitar tu clase.
       </p>
+
     `;
 
     return;
   }
 
+
   const free =
-    slotsLeft(pubSelectedDate);
+    slotsLeft(
+      pubSelectedDate
+    );
+
 
   panel.innerHTML = `
+
     <h3>
       ${fmtDateHuman(
         pubSelectedDate
       )}
     </h3>
 
+
+    <p
+      style="
+        color:var(--ink-soft);
+        font-size:14px;
+        margin-bottom:14px;
+      "
+    >
+      Podés elegir uno de los horarios
+      disponibles o proponernos otro
+      horario que te quede mejor.
+    </p>
+
+
+    <h4>
+      Horarios disponibles
+    </h4>
+
+
     ${
       free.length
+
         ? `
-          <p
-            style="
-              color:var(--ink-soft);
-              font-size:14px;
-            "
-          >
-            Elegí un horario:
-          </p>
 
-          <div class="slot-list">
-            ${
-              (
-                DB.schedule
-                  .availability[
-                    pubSelectedDate
-                  ] || []
-              )
-                .map(time=>{
-                  const isFree =
-                    free.includes(time);
+            <div class="slot-list">
 
-                  return `
-                    <button
-                      class="
-                        slot-btn
-                        ${
-                          pubSelectedTime === time
-                            ? 'picked'
-                            : ''
-                        }
-                      "
+              ${free.map(
+                time=>`
+
+                  <button
+                    type="button"
+                    class="
+                      slot-btn
                       ${
-                        isFree
-                          ? `
-                            onclick="
-                              pickTime('${time}')
-                            "
-                          `
-                          : 'disabled'
+                        pubTimeMode ===
+                          'available' &&
+                        pubSelectedTime ===
+                          time
+
+                          ? 'picked'
+                          : ''
                       }
-                    >
-                      ${time}
-                    </button>
-                  `;
-                })
-                .join('')
-            }
-          </div>
-        `
+                    "
+                    onclick="
+                      pickTime(
+                        '${time}'
+                      )
+                    "
+                  >
+                    ${time}
+                  </button>
+
+                `
+              ).join('')}
+
+            </div>
+
+          `
+
         : `
-          <p class="note">
-            No quedan horarios libres
-            este día. Probá otra fecha.
-          </p>
-        `
+
+            <p class="note">
+              No quedan horarios de los
+              publicados disponibles para
+              este día, pero podés proponernos
+              otro horario.
+            </p>
+
+          `
     }
+
+
+    <div
+      style="
+        display:flex;
+        align-items:center;
+        gap:12px;
+        margin:22px 0;
+      "
+    >
+
+      <div
+        style="
+          height:1px;
+          background:var(--line);
+          flex:1;
+        "
+      ></div>
+
+      <span class="note">
+        O
+      </span>
+
+      <div
+        style="
+          height:1px;
+          background:var(--line);
+          flex:1;
+        "
+      ></div>
+
+    </div>
+
+
+    <div class="field">
+
+      <label>
+        Proponer otro horario
+      </label>
+
+      <input
+  id="bk-preferred-time-choice"
+  type="time"
+  value="${
+    pubPreferredTime || ''
+  }"
+>
+
+      <button
+  type="button"
+  class="mini-btn"
+  style="margin-top:10px;"
+  onclick="
+    confirmPreferredTime()
+  "
+>
+  Usar este horario
+</button>
+
+      <p class="note">
+        Podés indicarnos una hora distinta.
+        Este horario queda como preferencia
+        y será confirmado por WhatsApp.
+      </p>
+
+    </div>
+
 
     ${
+      pubTimeMode === 'available' &&
       pubSelectedTime
-        ? bookingFormHTML()
+
+        ? `
+
+            <div
+              class="success-box"
+              style="margin-top:14px;"
+            >
+              Horario elegido:
+              <strong>
+                ${pubSelectedTime}
+              </strong>
+            </div>
+
+          `
+
         : ''
     }
+
+
+    ${
+      pubTimeMode === 'preferred' &&
+      pubPreferredTime
+
+        ? `
+
+            <div
+              class="success-box"
+              style="margin-top:14px;"
+            >
+              Horario preferido:
+              <strong>
+                ${pubPreferredTime}
+              </strong>
+
+              <br>
+
+              <span
+                style="
+                  font-size:13px;
+                "
+              >
+                Lo confirmaremos por
+                WhatsApp.
+              </span>
+            </div>
+
+          `
+
+        : ''
+    }
+
+
+    ${
+      pubTimeMode
+
+        ? bookingFormHTML()
+
+        : `
+
+            <p
+              class="note"
+              style="
+                margin-top:16px;
+                text-align:center;
+              "
+            >
+              Elegí un horario para
+              continuar con la solicitud.
+            </p>
+
+          `
+    }
+
   `;
+
 }
 
 function pickTime(time){
-  pubSelectedTime = time;
+
+  pubSelectedTime =
+    time;
+
+  pubPreferredTime =
+    null;
+
+  pubTimeMode =
+    'available';
+
   renderSlotPanel();
+
+}
+
+
+async function confirmPreferredTime(){
+
+  const input =
+    document.getElementById(
+      'bk-preferred-time-choice'
+    );
+
+
+  if(!input){
+    return;
+  }
+
+
+  const time =
+    input.value;
+
+
+  if(!time){
+
+    alert(
+      'Elegí un horario primero.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    /*
+      Traemos nuevamente los horarios
+      ocupados para no trabajar con
+      información vieja.
+    */
+
+    await refreshPublicSchedule();
+
+
+    if(
+      isTimeOccupied(
+        pubSelectedDate,
+        time
+      )
+    ){
+
+      alert(
+        'Ese horario ya fue solicitado. Elegí otro horario.'
+      );
+
+      renderCalendarPublic();
+
+      return;
+    }
+
+
+    pubPreferredTime =
+      time;
+
+    pubSelectedTime =
+      null;
+
+    pubTimeMode =
+      'preferred';
+
+
+    renderSlotPanel();
+
+
+  }catch(error){
+
+    console.error(
+      'No se pudo verificar el horario:',
+      error
+    );
+
+    alert(
+      'No pudimos verificar el horario. Intentá nuevamente.'
+    );
+
+  }
+
 }
 
 function bookingFormHTML(){
-  const services = DB.services;
+
+  const services =
+    DB.services || [];
+
+
+  const chosenTime =
+    pubTimeMode === 'available'
+
+      ? pubSelectedTime
+
+      : pubPreferredTime;
+
+
+  const timeLabel =
+    pubTimeMode === 'available'
+
+      ? 'Horario elegido'
+
+      : 'Horario preferido';
+
 
   return `
+
     <form
-      onsubmit="return submitBooking(event)"
+      onsubmit="
+        return submitBooking(event)
+      "
       style="
         margin-top:18px;
-        border-top:1px solid var(--line);
+        border-top:
+          1px solid var(--line);
         padding-top:18px;
       "
     >
+
+
       <div class="field">
+
         <label>
           Nombre y apellido
         </label>
@@ -1673,11 +2594,13 @@ function bookingFormHTML(){
         <input
           required
           id="bk-name"
-          autocomplete="name"
         >
+
       </div>
 
+
       <div class="field">
+
         <label>
           Código de área
         </label>
@@ -1688,15 +2611,20 @@ function bookingFormHTML(){
           type="tel"
           inputmode="numeric"
           maxlength="4"
-          placeholder="Ejemplo: 381 o 3865"
+          placeholder="
+            Ejemplo: 381 o 3865
+          "
         >
 
         <p class="note">
           Escribilo sin el 0 inicial.
         </p>
+
       </div>
 
+
       <div class="field">
+
         <label>
           Número de WhatsApp
         </label>
@@ -1714,78 +2642,139 @@ function bookingFormHTML(){
           Escribí solamente el número,
           sin 15 y sin +54 9.
         </p>
+
       </div>
+
 
       <div class="field">
+
         <label>
-          Servicio
+          Clase
         </label>
 
-        <select id="bk-service">
-          <option value="suelta">
-            Clase suelta —
-            ${fmtMoney(
-              services.suelta.price
-            )}
-          </option>
+        <select
+          id="bk-service"
+          required
+        >
 
           ${
-            services.packs
-              .map(pack=>`
-                <option value="${pack.id}">
-                  ${escapeHTML(pack.name)} —
-                  ${fmtMoney(pack.price)}
-                </option>
-              `)
-              .join('')
+            services.length
+
+              ? services
+                  .map(
+                    service=>`
+
+                      <option
+                        value="${
+                          escapeHTML(
+                            service.id
+                          )
+                        }"
+                      >
+
+                        ${
+                          escapeHTML(
+                            service.name
+                          )
+                        }
+
+                        ${
+                          service.price !==
+                            null
+
+                            ? ' — ' +
+                              fmtMoney(
+                                service.price
+                              )
+
+                            : ''
+                        }
+
+                      </option>
+
+                    `
+                  )
+                  .join('')
+
+              : `
+
+                  <option value="">
+                    No hay clases disponibles
+                  </option>
+
+                `
           }
 
-          <option value="curso">
-            Curso integral -
-            Mi Primera Licencia —
-            ${fmtMoney(
-              services.curso.price
-            )}
-          </option>
         </select>
+
       </div>
+
+
+      <div
+        class="note"
+        style="
+          margin-bottom:14px;
+        "
+      >
+        ${timeLabel}:
+        <strong>
+          ${chosenTime}
+        </strong>
+      </div>
+
 
       <button
         class="cta-btn"
         type="submit"
         style="width:100%;"
+        ${
+          services.length
+            ? ''
+            : 'disabled'
+        }
       >
+
         Solicitar turno —
         ${fmtDateHuman(
           pubSelectedDate
         )}
-        a las
-        ${pubSelectedTime}
+
       </button>
 
+
       <div id="bk-msg"></div>
+
     </form>
+
   `;
+
 }
 
 async function submitBooking(event){
+
   event.preventDefault();
+
 
   const messageBox =
     document.getElementById(
       'bk-msg'
     );
 
+
   const submitButton =
     event.target.querySelector(
       'button[type="submit"]'
     );
 
+
   const name =
     document
-      .getElementById('bk-name')
+      .getElementById(
+        'bk-name'
+      )
       .value
       .trim();
+
 
   const areaCode =
     document
@@ -1793,7 +2782,11 @@ async function submitBooking(event){
         'bk-area-code'
       )
       .value
-      .replace(/\D/g, '');
+      .replace(
+        /\D/g,
+        ''
+      );
+
 
   const phoneNumber =
     document
@@ -1801,7 +2794,11 @@ async function submitBooking(event){
         'bk-phone-number'
       )
       .value
-      .replace(/\D/g, '');
+      .replace(
+        /\D/g,
+        ''
+      );
+
 
   const service =
     document
@@ -1810,16 +2807,77 @@ async function submitBooking(event){
       )
       .value;
 
+
+  const chosenService =
+    DB.services.find(
+      item=>
+        item.id === service
+    );
+
+
+  if(!chosenService){
+
+    messageBox.innerHTML = `
+
+      <div class="error-box">
+        Elegí una clase disponible.
+      </div>
+
+    `;
+
+    return false;
+  }
+
+
+  const hasAvailableTime =
+    pubTimeMode ===
+      'available' &&
+    Boolean(
+      pubSelectedTime
+    );
+
+
+  const hasPreferredTime =
+    pubTimeMode ===
+      'preferred' &&
+    Boolean(
+      pubPreferredTime
+    );
+
+
+  if(
+    !hasAvailableTime &&
+    !hasPreferredTime
+  ){
+
+    messageBox.innerHTML = `
+
+      <div class="error-box">
+        Elegí un horario disponible
+        o proponé otro horario.
+      </div>
+
+    `;
+
+    return false;
+  }
+
+
   const nationalNumber =
-    areaCode + phoneNumber;
+    areaCode +
+    phoneNumber;
+
 
   if(
     areaCode.length < 2 ||
     areaCode.length > 4 ||
     nationalNumber.length !== 10
   ){
+
     messageBox.innerHTML = `
+
       <div class="error-box">
+
         Revisá el teléfono ingresado.
         El código de área y el número
         deben sumar 10 dígitos.
@@ -1829,150 +2887,331 @@ async function submitBooking(event){
         Ejemplos:
 
         <br>
+
         381 + 1234567
 
         <br>
+
         3865 + 123456
+
       </div>
+
     `;
 
     return false;
   }
 
+
   const phone =
-    '549' + nationalNumber;
+    '549' +
+    nationalNumber;
+
+
+  /*
+    Guardamos estos valores antes
+    de refrescar o limpiar el formulario.
+  */
+
+  const chosenDate =
+    pubSelectedDate;
+
+
+  const requestedTime =
+    hasAvailableTime
+
+      ? pubSelectedTime
+
+      : pubPreferredTime;
+
+
+  const requestedMode =
+    pubTimeMode;
+
 
   try{
-    submitButton.disabled = true;
+
+    submitButton.disabled =
+      true;
+
     submitButton.textContent =
-      'Guardando reserva…';
+      'Guardando solicitud…';
 
-    messageBox.innerHTML = '';
+    messageBox.innerHTML =
+      '';
 
-    await refreshPublicSchedule();
 
-    if(
-      !slotsLeft(pubSelectedDate)
-        .includes(pubSelectedTime)
-    ){
-      messageBox.innerHTML = `
-        <div class="error-box">
-          Uy, ese horario acaba
-          de ocuparse.
-          Elegí otro.
-        </div>
-      `;
+    /*
+  Volvemos a consultar justo antes
+  de guardar la solicitud.
 
-      renderCalendarPublic();
+  Esto funciona tanto para un horario
+  publicado como para uno propuesto.
+*/
 
-      return false;
-    }
+await refreshPublicSchedule();
+
+
+if(
+  isTimeOccupied(
+    pubSelectedDate,
+    requestedTime
+  )
+){
+
+  messageBox.innerHTML = `
+
+    <div class="error-box">
+
+      Ese horario acaba de ser
+      solicitado por otra persona.
+
+      <br><br>
+
+      Elegí otro horario.
+
+    </div>
+
+  `;
+
+
+  renderCalendarPublic();
+
+  return false;
+}
+
+
+/*
+  Si eligió uno de los horarios
+  publicados, además comprobamos
+  que siga disponible dentro del
+  horario configurado.
+*/
+
+if(
+  hasAvailableTime &&
+  !slotsLeft(
+    pubSelectedDate
+  ).includes(
+    pubSelectedTime
+  )
+){
+
+  messageBox.innerHTML = `
+
+    <div class="error-box">
+
+      Ese horario ya no está
+      disponible.
+
+      <br><br>
+
+      Elegí otro horario.
+
+    </div>
+
+  `;
+
+
+  renderCalendarPublic();
+
+  return false;
+}
+
 
     const { error } =
       await supabaseClient
+
         .from('bookings')
+
         .insert({
+
           class_date:
             pubSelectedDate,
 
+
+          /*
+            Si eligió un turno publicado,
+            guardamos class_time.
+
+            Si propuso otro horario,
+            class_time queda null hasta
+            que la administradora confirme.
+          */
+
           class_time:
-            pubSelectedTime,
+            hasAvailableTime
+              ? pubSelectedTime
+              : null,
+
+
+          preferred_time:
+            hasPreferredTime
+              ? pubPreferredTime
+              : null,
+
 
           student_name:
             name,
 
+
           phone,
+
 
           service_id:
             service,
 
+
+          service_name:
+            chosenService.name,
+
+
+          booking_source:
+            'web',
+
+
           status:
             'pending'
+
         });
 
-    if(error){
-      if(error.code === '23505'){
-        await refreshPublicSchedule();
-        renderCalendarPublic();
 
-        const panel =
-          document.getElementById(
-            'slot-panel'
-          );
+    if(
+  error.code ===
+    '23505'
+){
 
-        if(panel){
-          panel.innerHTML += `
-            <div class="error-box">
-              Ese horario acaba de
-              ser reservado por otra
-              persona. Elegí otro turno.
-            </div>
-          `;
-        }
+  await refreshPublicSchedule();
 
-        return false;
-      }
+  renderCalendarPublic();
 
-      throw error;
-    }
 
-    const chosenTime =
-      pubSelectedTime;
+  const panel =
+    document.getElementById(
+      'slot-panel'
+    );
 
-    const chosenDate =
-      pubSelectedDate;
 
-    pubSelectedTime = null;
+  if(panel){
+
+    panel.innerHTML += `
+
+      <div class="error-box">
+
+        Ese horario acaba de ser
+        solicitado por otra persona.
+
+        <br><br>
+
+        Elegí otro horario.
+
+      </div>
+
+    `;
+  }
+
+
+  return false;
+}
+
+
+    pubSelectedTime =
+      null;
+
+    pubPreferredTime =
+      null;
+
+    pubTimeMode =
+      null;
+
 
     await refreshPublicSchedule();
+
     renderCalendarPublic();
 
-    document
-      .getElementById(
+
+    const panel =
+      document.getElementById(
         'slot-panel'
-      )
-      .innerHTML += `
+      );
+
+
+    if(panel){
+
+      panel.innerHTML += `
+
         <div class="success-box">
+
           ¡Listo,
           ${escapeHTML(name)}!
 
-          Solicitaste el turno del
-          ${fmtDateHuman(chosenDate)}
-          a las ${chosenTime}.
+          <br><br>
 
-          Te confirmamos por
-          WhatsApp a la brevedad.
+          Solicitaste una clase para el
+          ${fmtDateHuman(
+            chosenDate
+          )}.
+
+          <br>
+
+          ${
+            requestedMode ===
+              'available'
+
+              ? `
+                  Elegiste el horario
+                  de las
+                  <strong>
+                    ${requestedTime}
+                  </strong>.
+                `
+
+              : `
+                  Nos indicaste como
+                  horario preferido las
+                  <strong>
+                    ${requestedTime}
+                  </strong>.
+                `
+          }
+
+          <br><br>
+
+          Te vamos a contactar por
+          WhatsApp para confirmar
+          el turno.
+
         </div>
+
       `;
+    }
+
+
   }catch(error){
+
     console.error(
       'No se pudo guardar la reserva:',
       error
     );
 
+
     messageBox.innerHTML = `
+
       <div class="error-box">
-        No se pudo guardar la reserva.
+        No se pudo guardar la solicitud.
         Revisá tu conexión e intentá
         nuevamente.
       </div>
-    `;
-  }finally{
-    submitButton.disabled = false;
 
-    if(
-      pubSelectedDate &&
-      pubSelectedTime
-    ){
-      submitButton.textContent =
-        'Solicitar turno — ' +
-        fmtDateHuman(
-          pubSelectedDate
-        ) +
-        ' a las ' +
-        pubSelectedTime;
-    }
+    `;
+
+
+  }finally{
+
+    submitButton.disabled =
+      false;
+
   }
+
 
   return false;
 }
@@ -2501,12 +3740,10 @@ function buildPublicSections(){
           </h2>
 
           <p class="lede">
-            Clases sueltas para
-            perfeccionarte, packs para
-            practicar seguido, o el curso
-            completo para sacar tu
-            primera licencia.
-          </p>
+  Conocé las clases disponibles
+  y elegí la opción que mejor
+  se adapte a lo que necesitás.
+</p>
 
           <div id="services-cards"></div>
 
@@ -2857,7 +4094,6 @@ async function currentSessionIsAdmin(){
   }
 }
 
-
 async function openAdmin(){
   const publicView =
     document.getElementById(
@@ -2899,7 +4135,6 @@ async function openAdmin(){
   }
 }
 
-
 function closeAdmin(){
   document
     .getElementById(
@@ -2915,7 +4150,6 @@ function closeAdmin(){
     .classList
     .remove('hidden');
 }
-
 
 function showAdminLogin(){
   document
@@ -2946,7 +4180,6 @@ function showAdminLogin(){
       .add('hidden');
   }
 }
-
 
 async function handleLogin(event){
   event.preventDefault();
@@ -3122,7 +4355,6 @@ async function handleLogin(event){
   return false;
 }
 
-
 async function logoutAdmin(){
   try{
     const {
@@ -3160,7 +4392,6 @@ async function logoutAdmin(){
 
   showAdminLogin();
 }
-
 
 function showAdminDashboard(){
   document
@@ -3200,6 +4431,10 @@ const ADMIN_TABS = [
     label: 'Fichas de alumnas'
   },
   {
+    id: 'pagos',
+    label: 'Pagos'
+  },
+  {
     id: 'galeria',
     label: 'Galería de egresadas'
   },
@@ -3209,7 +4444,7 @@ const ADMIN_TABS = [
   },
   {
     id: 'precios',
-    label: 'Precios y promos'
+    label: 'Clases y promociones'
   },
   {
     id: 'mensajes',
@@ -3282,6 +4517,9 @@ async function goAdmin(id){
 
       alumnas:
         renderAdminStudents,
+
+      pagos:
+        renderAdminPayments,
 
       galeria:
         renderAdminGallery,
@@ -3362,23 +4600,41 @@ function renderAdminDashboard(){
     ).length;
 
   const thisMonth =
-    today.slice(0, 7);
+  today.slice(0, 7);
 
-  const income =
-    confirmed
-      .filter(booking=>
-        booking.date
-          .slice(0, 7) ===
+
+/*
+  Dinero realmente cobrado
+  durante el mes actual.
+*/
+const income =
+  (DB.payments || [])
+    .filter(payment=>
+      payment.date &&
+      payment.date.slice(0, 7) ===
         thisMonth
-      )
-      .reduce(
-        (total, booking)=>
-          total +
-          priceFor(
-            booking.service
-          ),
-        0
-      );
+    )
+    .reduce(
+      (total, payment)=>
+        total + payment.amount,
+      0
+    );
+
+
+/*
+  Total que todavía queda
+  pendiente de cobro.
+*/
+const pendingToCollect =
+  (DB.paymentDues || [])
+    .filter(item=>
+      item.status === 'pending'
+    )
+    .reduce(
+      (total, item)=>
+        total + item.amount,
+      0
+    );
 
   const pendingReviews =
     DB.reviews.filter(
@@ -3467,14 +4723,29 @@ function renderAdminDashboard(){
         </div>
 
         <div class="stat-card">
-          <div class="num">
-            ${fmtMoney(income)}
-          </div>
 
-          <div class="lbl">
-            Ingresos estimados del mes
-          </div>
-        </div>
+  <div class="num">
+    ${fmtMoney(income)}
+  </div>
+
+  <div class="lbl">
+    Ingresos cobrados este mes
+  </div>
+
+</div>
+
+
+<div class="stat-card">
+
+  <div class="num">
+    ${fmtMoney(pendingToCollect)}
+  </div>
+
+  <div class="lbl">
+    Pendiente de cobro
+  </div>
+
+</div>
       </div>
 
       <div class="panel">
@@ -3517,7 +4788,8 @@ function renderAdminDashboard(){
                           <td>
                             ${
                               labelFor(
-                                booking.service
+                                booking.service,
+                                booking.serviceName
                               )
                             }
                           </td>
@@ -3610,42 +4882,25 @@ function renderAdminDashboard(){
     `;
 }
 
-function priceFor(serviceKey){
-  if(serviceKey === 'suelta'){
-    return DB.services.suelta.price;
-  }
+function labelFor(
+  serviceKey,
+  fallbackName=''
+){
 
-  if(serviceKey === 'curso'){
-    return DB.services.curso.price;
-  }
-
-  const pack =
-    DB.services.packs.find(
+  const service =
+    DB.services.find(
       item=>item.id === serviceKey
     );
 
-  return pack
-    ? pack.price
-    : 0;
-}
-
-function labelFor(serviceKey){
-  if(serviceKey === 'suelta'){
-    return SERVICE_LABELS.suelta;
+  if(service){
+    return service.name;
   }
 
-  if(serviceKey === 'curso'){
-    return SERVICE_LABELS.curso;
+  if(fallbackName){
+    return fallbackName;
   }
 
-  const pack =
-    DB.services.packs.find(
-      item=>item.id === serviceKey
-    );
-
-  return pack
-    ? pack.name
-    : serviceKey;
+  return serviceKey || 'Clase';
 }
 
 /* ==================================================================
@@ -3655,12 +4910,321 @@ function labelFor(serviceKey){
 let adminMonthOffset = 0;
 let adminSelectedDate = null;
 
+const FULL_DOW = [
+  'Domingo',
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado'
+];
+
+
+/* ================================================================
+   HORARIOS HABITUALES
+   ================================================================ */
+
+function weeklyRangesForDay(day){
+
+  return (
+    DB.weeklyAvailability || []
+  )
+    .filter(item=>
+      item.dayOfWeek === day
+    )
+    .sort((a,b)=>
+      a.startTime.localeCompare(
+        b.startTime
+      )
+    );
+}
+
+function renderWeeklySchedule(){
+
+  return FULL_DOW.map(
+    (dayName, dayNumber)=>{
+
+      const ranges =
+        weeklyRangesForDay(
+          dayNumber
+        );
+
+      return `
+        <div
+          class="panel"
+          style="
+            margin-bottom:12px;
+            padding:16px;
+          "
+        >
+
+          <h4
+            style="
+              margin-top:0;
+              margin-bottom:10px;
+            "
+          >
+            ${dayName}
+          </h4>
+
+
+          ${
+            ranges.length
+
+              ? `
+                  <div
+                    class="slot-list"
+                    style="
+                      margin-bottom:12px;
+                    "
+                  >
+
+                    ${ranges.map(range=>`
+
+                      <span
+                        class="slot-btn"
+                        style="
+                          display:inline-flex;
+                          align-items:center;
+                          gap:8px;
+                        "
+                      >
+
+                        ${range.startTime}
+                        -
+                        ${range.endTime}
+
+                        <button
+                          class="tag-del"
+                          title="Eliminar rango"
+                          onclick="
+                            removeWeeklyRange(
+                              '${range.id}'
+                            )
+                          "
+                        >
+                          ✕
+                        </button>
+
+                      </span>
+
+                    `).join('')}
+
+                  </div>
+                `
+
+              : `
+                  <p class="note">
+                    No trabaja este día.
+                  </p>
+                `
+          }
+
+
+          <div class="inline-form">
+
+            <div class="f">
+
+              <label>
+                Desde
+              </label>
+
+              <input
+                type="time"
+                id="weekly-start-${dayNumber}"
+              >
+
+            </div>
+
+
+            <div class="f">
+
+              <label>
+                Hasta
+              </label>
+
+              <input
+                type="time"
+                id="weekly-end-${dayNumber}"
+              >
+
+            </div>
+
+
+            <button
+              class="mini-btn"
+              onclick="
+                addWeeklyRange(
+                  ${dayNumber}
+                )
+              "
+            >
+              Agregar rango
+            </button>
+
+          </div>
+
+        </div>
+      `;
+    }
+  ).join('');
+}
+
+async function addWeeklyRange(
+  dayNumber
+){
+
+  const startInput =
+    document.getElementById(
+      'weekly-start-' +
+      dayNumber
+    );
+
+  const endInput =
+    document.getElementById(
+      'weekly-end-' +
+      dayNumber
+    );
+
+  const startTime =
+    startInput.value;
+
+  const endTime =
+    endInput.value;
+
+
+  if(
+    !startTime ||
+    !endTime
+  ){
+    alert(
+      'Elegí la hora de inicio y la hora de finalización.'
+    );
+
+    return;
+  }
+
+
+  if(
+    timeToMinutes(endTime) <=
+    timeToMinutes(startTime)
+  ){
+    alert(
+      'La hora final tiene que ser posterior a la hora de inicio.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from(
+          'weekly_availability'
+        )
+
+        .insert({
+
+          day_of_week:
+            dayNumber,
+
+          start_time:
+            startTime,
+
+          end_time:
+            endTime
+
+        });
+
+
+    if(
+      error &&
+      error.code !== '23505'
+    ){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminAgenda();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo agregar el horario habitual.'
+    );
+
+  }
+}
+
+async function removeWeeklyRange(id){
+
+  if(
+    !confirm(
+      '¿Querés eliminar este rango horario?'
+    )
+  ){
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from(
+          'weekly_availability'
+        )
+
+        .delete()
+
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminAgenda();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo eliminar el horario habitual.'
+    );
+
+  }
+}
+
+
+/* ================================================================
+   AGENDA PRINCIPAL
+   ================================================================ */
+
 function renderAdminAgenda(){
+
   document
     .getElementById(
       'admin-main'
     )
     .innerHTML = `
+
       <h2>
         Gestión de agenda
       </h2>
@@ -3669,40 +5233,97 @@ function renderAdminAgenda(){
         class="lede"
         style="margin-bottom:22px;"
       >
-        Creá turnos, bloqueá días
-        y confirmá o cancelá
-        solicitudes.
+        Configurá tus horarios habituales,
+        administrá solicitudes y agregá
+        clases manualmente.
       </p>
 
-      <div class="booking-grid">
-        <div
-          class="cal"
-          id="cal-admin"
-        ></div>
+
+      <div class="panel">
+
+        <h3>
+          Horarios habituales
+        </h3>
+
+        <p class="note">
+          Podés agregar más de un rango
+          para el mismo día.
+          Por ejemplo:
+          09:00 - 12:00 y
+          16:00 - 20:00.
+          El horario final también puede
+          elegirse como inicio de una clase.
+        </p>
 
         <div
-          class="slot-panel"
-          id="admin-day-panel"
-        ></div>
+          style="
+            margin-top:18px;
+          "
+        >
+          ${renderWeeklySchedule()}
+        </div>
+
+      </div>
+
+
+      <div class="panel">
+
+        <h3>
+          Agenda por fecha
+        </h3>
+
+        <p class="note">
+          Elegí un día para ver solicitudes,
+          clases, horarios especiales
+          o agregar una clase manualmente.
+        </p>
+
+        <div
+          class="booking-grid"
+          style="margin-top:18px;"
+        >
+
+          <div
+            class="cal"
+            id="cal-admin"
+          ></div>
+
+          <div
+            class="slot-panel"
+            id="admin-day-panel"
+          ></div>
+
+        </div>
+
       </div>
     `;
+
 
   drawAdminCalendar();
 }
 
 function drawAdminCalendar(){
+
   buildCalendar(
     'cal-admin',
     adminMonthOffset,
     {
-      onNav: delta=>{
-        adminMonthOffset += delta;
+
+      onNav:delta=>{
+
+        adminMonthOffset +=
+          delta;
+
         drawAdminCalendar();
       },
 
-      onPick: iso=>{
-        adminSelectedDate = iso;
+      onPick:iso=>{
+
+        adminSelectedDate =
+          iso;
+
         renderAdminDayPanel();
+
         drawAdminCalendar();
       },
 
@@ -3711,67 +5332,1027 @@ function drawAdminCalendar(){
 
       mode:
         'admin'
+
     }
   );
+
 
   renderAdminDayPanel();
 }
 
+/* ================================================================
+   HORARIOS ESPECIALES POR FECHA
+   ================================================================ */
+
+function overridesForDate(iso){
+
+  return (
+    DB.dateOverrides || []
+  )
+    .filter(item=>
+      item.date === iso
+    )
+    .sort((a,b)=>
+      a.startTime.localeCompare(
+        b.startTime
+      )
+    );
+}
+
+function habitualRangesForDate(iso){
+
+  const date =
+    new Date(
+      iso + 'T12:00:00'
+    );
+
+  return weeklyRangesForDay(
+    date.getDay()
+  );
+}
+
+async function addDateOverride(iso){
+
+  const startInput =
+    document.getElementById(
+      'override-start'
+    );
+
+  const endInput =
+    document.getElementById(
+      'override-end'
+    );
+
+
+  const startTime =
+    startInput.value;
+
+  const endTime =
+    endInput.value;
+
+
+  if(
+    !startTime ||
+    !endTime
+  ){
+    alert(
+      'Elegí la hora de inicio y finalización.'
+    );
+
+    return;
+  }
+
+
+  if(
+    timeToMinutes(endTime) <=
+    timeToMinutes(startTime)
+  ){
+    alert(
+      'La hora final tiene que ser posterior a la inicial.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from(
+          'date_availability_overrides'
+        )
+
+        .insert({
+
+          class_date:
+            iso,
+
+          start_time:
+            startTime,
+
+          end_time:
+            endTime
+
+        });
+
+
+    if(
+      error &&
+      error.code !== '23505'
+    ){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminDayPanel();
+
+    drawAdminCalendar();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo agregar el horario especial.'
+    );
+
+  }
+}
+
+async function removeDateOverride(id){
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from(
+          'date_availability_overrides'
+        )
+
+        .delete()
+
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminDayPanel();
+
+    drawAdminCalendar();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo eliminar el horario especial.'
+    );
+
+  }
+}
+
+async function clearDateOverrides(iso){
+
+  if(
+    !confirm(
+      '¿Querés volver al horario habitual para este día?'
+    )
+  ){
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from(
+          'date_availability_overrides'
+        )
+
+        .delete()
+
+        .eq(
+          'class_date',
+          iso
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminDayPanel();
+
+    drawAdminCalendar();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudieron quitar los horarios especiales.'
+    );
+
+  }
+}
+
+/* ================================================================
+   BLOQUEAR DÍA
+   ================================================================ */
+
+async function toggleBlockDay(
+  iso,
+  value
+){
+
+  try{
+
+    let result;
+
+
+    if(value){
+
+      result =
+        await supabaseClient
+
+          .from(
+            'blocked_days'
+          )
+
+          .upsert({
+
+            class_date:
+              iso,
+
+            reason:
+              ''
+
+          });
+
+    }else{
+
+      result =
+        await supabaseClient
+
+          .from(
+            'blocked_days'
+          )
+
+          .delete()
+
+          .eq(
+            'class_date',
+            iso
+          );
+
+    }
+
+
+    if(result.error){
+      throw result.error;
+    }
+
+
+    await loadAdminData();
+
+    drawAdminCalendar();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo actualizar el bloqueo del día.'
+    );
+
+  }
+}
+
+/* ================================================================
+   CLASE MANUAL
+   ================================================================ */
+
+async function addManualClass(iso){
+
+  const studentId =
+    document
+      .getElementById(
+        'manual-student'
+      )
+      .value;
+
+
+  const serviceId =
+    document
+      .getElementById(
+        'manual-service'
+      )
+      .value;
+
+
+  const time =
+    document
+      .getElementById(
+        'manual-time'
+      )
+      .value;
+
+
+  const note =
+    document
+      .getElementById(
+        'manual-note'
+      )
+      .value
+      .trim();
+
+
+  const student =
+    DB.students.find(
+      item=>
+        item.id ===
+        studentId
+    );
+
+
+  const service =
+    DB.services.find(
+      item=>
+        item.id ===
+        serviceId
+    );
+
+
+  if(!student){
+
+    alert(
+      'Elegí una alumna.'
+    );
+
+    return;
+  }
+
+
+  if(!service){
+
+    alert(
+      'Elegí una clase.'
+    );
+
+    return;
+  }
+
+
+  if(!time){
+
+    alert(
+      'Elegí el horario de la clase.'
+    );
+
+    return;
+  }
+
+
+  const occupied =
+  isTimeOccupied(
+    iso,
+    time
+  );
+
+
+  if(occupied){
+
+    alert(
+      'Ese horario ya tiene una clase o solicitud activa.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('bookings')
+
+        .insert({
+
+          class_date:
+            iso,
+
+          class_time:
+            time,
+
+          student_id:
+            student.id,
+
+          student_name:
+            student.name,
+
+          phone:
+            student.phone || '',
+
+          service_id:
+            service.id,
+
+          service_name:
+            service.name,
+
+          booking_source:
+            'manual',
+
+          admin_note:
+            note,
+
+          status:
+            'confirmed',
+
+          attendance_status:
+            'scheduled'
+
+        });
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminDayPanel();
+
+    drawAdminCalendar();
+
+
+  }catch(error){
+
+    if(
+      error.code === '23505'
+    ){
+
+      alert(
+        'Ese horario ya está ocupado.'
+      );
+
+      return;
+    }
+
+
+    showDatabaseError(
+      error,
+      'No se pudo agregar la clase.'
+    );
+
+  }
+}
+
+/* ================================================================
+   CAMBIAR HORARIO
+   ================================================================ */
+
+async function changeBookingTime(id){
+
+  const booking =
+    DB.bookings.find(
+      item=>item.id === id
+    );
+
+
+  if(!booking){
+    return;
+  }
+
+
+  const newTime =
+    prompt(
+      'Nuevo horario de la clase:',
+      booking.time ||
+      booking.preferredTime ||
+      ''
+    );
+
+
+  if(newTime === null){
+    return;
+  }
+
+
+  const cleanTime =
+    newTime.trim();
+
+
+  if(
+    !/^([01]\d|2[0-3]):[0-5]\d$/
+      .test(cleanTime)
+  ){
+
+    alert(
+      'Ingresá el horario en formato HH:MM. Ejemplo: 10:20'
+    );
+
+    return;
+  }
+
+
+  const occupied =
+  DB.bookings.some(
+    item=>
+      item.id !== id &&
+      item.date ===
+        booking.date &&
+      item.time ===
+        cleanTime &&
+      bookingOccupiesSlot(
+        item
+      )
+  );
+
+
+  if(occupied){
+
+    alert(
+      'Ese horario ya está ocupado.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('bookings')
+
+        .update({
+
+          class_time:
+            cleanTime,
+
+          updated_at:
+            new Date()
+              .toISOString()
+
+        })
+
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminDayPanel();
+
+    drawAdminCalendar();
+
+
+  }catch(error){
+
+    if(
+      error.code === '23505'
+    ){
+
+      alert(
+        'Ese horario ya está ocupado.'
+      );
+
+      return;
+    }
+
+
+    showDatabaseError(
+      error,
+      'No se pudo cambiar el horario.'
+    );
+
+  }
+}
+
+/* ================================================================
+   ESTADO DE RESERVA
+   ================================================================ */
+
+async function setBookingStatus(
+  id,
+  status
+){
+
+  const booking =
+    DB.bookings.find(
+      item=>
+        item.id === id
+    );
+
+
+  if(!booking){
+    return;
+  }
+
+
+  const updateData = {
+
+    status,
+
+    updated_at:
+      new Date()
+        .toISOString()
+
+  };
+
+
+  /*
+    Si es una solicitud con horario
+    preferido y se confirma, ese horario
+    pasa a ser el horario real.
+  */
+
+  if(
+    status === 'confirmed' &&
+    !booking.time
+  ){
+
+    if(
+      !booking.preferredTime
+    ){
+
+      alert(
+        'Esta solicitud no tiene un horario definido.'
+      );
+
+      return;
+    }
+
+
+    const occupied =
+      DB.bookings.some(
+        item=>
+
+          item.id !== id &&
+
+          item.date ===
+            booking.date &&
+
+          item.time ===
+            booking.preferredTime &&
+
+          (
+            item.status ===
+              'pending' ||
+
+            item.status ===
+              'confirmed'
+          )
+      );
+
+
+    if(occupied){
+
+      alert(
+        'El horario preferido ya está ocupado. Cambiá el horario antes de confirmar.'
+      );
+
+      return;
+    }
+
+
+    updateData.class_time =
+      booking.preferredTime;
+
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('bookings')
+
+        .update(
+          updateData
+        )
+
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminDayPanel();
+
+    drawAdminCalendar();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo actualizar el estado de la reserva.'
+    );
+
+  }
+
+}
+
+/* ================================================================
+   ASISTENCIA / CLASE REALIZADA
+   ================================================================ */
+
+async function setBookingAttendance(
+  id,
+  attendanceStatus
+){
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('bookings')
+
+        .update({
+
+          attendance_status:
+            attendanceStatus,
+
+          updated_at:
+            new Date()
+              .toISOString()
+
+        })
+
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminDayPanel();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo actualizar la asistencia.'
+    );
+
+  }
+}
+
+/* ================================================================
+   PANEL DEL DÍA
+   ================================================================ */
+
+let showClosedBookings = false;
+
+
+function toggleClosedBookings(){
+
+  showClosedBookings =
+    !showClosedBookings;
+
+  renderAdminDayPanel();
+}
+
+
+function bookingStatusLabel(status){
+
+  if(status === 'pending'){
+    return 'Pendiente';
+  }
+
+  if(status === 'confirmed'){
+    return 'Confirmada';
+  }
+
+  if(status === 'rejected'){
+    return 'Rechazada';
+  }
+
+  if(status === 'cancelled'){
+    return 'Cancelada';
+  }
+
+  return status;
+}
+
+
+function bookingStatusClass(status){
+
+  if(status === 'confirmed'){
+    return 'confirmed';
+  }
+
+  if(
+    status === 'rejected' ||
+    status === 'cancelled'
+  ){
+    return 'cancelled';
+  }
+
+  return 'pending';
+}
+
+function bookingWhatsAppText(
+  booking
+){
+
+  let timeMessage =
+    '';
+
+
+  if(
+    booking.preferredTime
+  ){
+
+    if(
+      booking.time &&
+      booking.time !==
+        booking.preferredTime
+    ){
+
+      timeMessage =
+        ' Nos indicaste como horario preferido las ' +
+        booking.preferredTime +
+        ', y el horario que estamos coordinando es a las ' +
+        booking.time +
+        '.';
+
+    }else{
+
+      timeMessage =
+        ' Nos indicaste como horario preferido las ' +
+        booking.preferredTime +
+        '.';
+
+    }
+
+  }else if(
+    booking.time
+  ){
+
+    timeMessage =
+      ' Elegiste el horario de las ' +
+      booking.time +
+      '.';
+
+  }
+
+
+  return (
+    'Hola ' +
+    booking.name +
+    '! Te escribimos por tu solicitud de clase de manejo para el ' +
+    fmtDateHuman(
+      booking.date
+    ) +
+    '.' +
+    timeMessage +
+    ' Te escribimos para coordinar y confirmar el turno.'
+  );
+
+}
+
 function renderAdminDayPanel(){
+
   const panel =
     document.getElementById(
       'admin-day-panel'
     );
 
+
+  if(!panel){
+    return;
+  }
+
+
   if(!adminSelectedDate){
+
     panel.innerHTML = `
+
       <h3>
         Elegí un día
       </h3>
 
       <p class="note">
         Tocá una fecha en el calendario
-        para administrarla.
+        para ver y administrar ese día.
       </p>
     `;
 
     return;
   }
 
+
   const iso =
     adminSelectedDate;
+
 
   const blocked =
     Boolean(
       DB.schedule.blocked[iso]
     );
 
-  const slots =
-    DB.schedule
-      .availability[iso] || [];
 
-  const bookingsDay =
-    DB.bookings.filter(
-      booking=>
-        booking.date === iso &&
-        booking.status !==
-          'cancelled'
-    );
+  const overrides =
+    overridesForDate(iso);
+
+
+  const habitualRanges =
+    habitualRangesForDate(iso);
+
+
+  const allBookingsDay =
+  DB.bookings
+
+    .filter(booking=>
+      booking.date === iso
+    )
+
+    .sort((a,b)=>{
+
+  const timeA =
+    a.time ||
+    a.preferredTime ||
+    '99:99';
+
+  const timeB =
+    b.time ||
+    b.preferredTime ||
+    '99:99';
+
+  return timeA.localeCompare(
+    timeB
+  );
+
+});
+
+
+const closedBookings =
+  allBookingsDay.filter(
+    booking=>
+      booking.status ===
+        'rejected' ||
+      booking.status ===
+        'cancelled'
+  );
+
+
+const bookingsDay =
+  showClosedBookings
+
+    ? allBookingsDay
+
+    : allBookingsDay.filter(
+        booking=>
+          booking.status !==
+            'rejected' &&
+          booking.status !==
+            'cancelled'
+      );
+
 
   panel.innerHTML = `
+
     <h3>
       ${fmtDateHuman(iso)}
     </h3>
+
 
     <label
       style="
         display:flex;
         align-items:center;
         gap:8px;
-        margin-bottom:14px;
+        margin-bottom:18px;
         font-size:14px;
       "
     >
+
       <input
         type="checkbox"
         ${blocked ? 'checked' : ''}
@@ -3783,412 +6364,817 @@ function renderAdminDayPanel(){
         "
       >
 
-      No atiendo este día
-      (bloquear)
+      No trabajo este día
+
     </label>
+
 
     ${
       !blocked
         ? `
-          <p
-            style="
-              font-size:13px;
-              color:var(--ink-soft);
-              margin-bottom:6px;
-            "
-          >
-            Horarios disponibles:
-          </p>
-
-          <div class="slot-list">
-            ${
-              slots.length
-                ? slots
-                    .map(time=>{
-                      const isBooked =
-                        bookingsDay.some(
-                          booking=>
-                            booking.time ===
-                            time
-                        );
-
-                      return `
-                        <span
-                          class="
-                            slot-btn
-                            ${
-                              isBooked
-                                ? 'picked'
-                                : ''
-                            }
-                          "
-                          style="
-                            display:inline-flex;
-                            align-items:center;
-                            gap:6px;
-                          "
-                        >
-                          ${time}
-
-                          ${
-                            !isBooked
-                              ? `
-                                <button
-                                  class="tag-del"
-                                  onclick="
-                                    removeSlot(
-                                      '${iso}',
-                                      '${time}'
-                                    )
-                                  "
-                                  title="Quitar"
-                                >
-                                  ✕
-                                </button>
-                              `
-                              : ''
-                          }
-                        </span>
-                      `;
-                    })
-                    .join('')
-                : `
-                  <span class="note">
-                    Sin horarios cargados.
-                  </span>
-                `
-            }
-          </div>
 
           <div
-            class="inline-form"
-            style="margin-bottom:20px;"
+            style="
+              border-top:
+                1px solid var(--line);
+              padding-top:16px;
+              margin-top:6px;
+            "
           >
-            <div class="f">
-              <label>
-                Agregar horario
-              </label>
 
-              <input
-                type="time"
-                id="new-slot-time"
+            <h4>
+              Horario del día
+            </h4>
+
+
+            ${
+              overrides.length
+
+                ? `
+
+                    <p class="note">
+                      Este día tiene un
+                      horario especial.
+                    </p>
+
+                    <div class="slot-list">
+
+                      ${overrides.map(
+                        range=>`
+
+                          <span
+                            class="slot-btn"
+                            style="
+                              display:inline-flex;
+                              align-items:center;
+                              gap:6px;
+                            "
+                          >
+
+                            ${range.startTime}
+                            -
+                            ${range.endTime}
+
+                            <button
+                              class="tag-del"
+                              onclick="
+                                removeDateOverride(
+                                  '${range.id}'
+                                )
+                              "
+                            >
+                              ✕
+                            </button>
+
+                          </span>
+
+                        `
+                      ).join('')}
+
+                    </div>
+
+
+                    <button
+                      class="mini-btn"
+                      style="margin-top:10px;"
+                      onclick="
+                        clearDateOverrides(
+                          '${iso}'
+                        )
+                      "
+                    >
+                      Volver al horario habitual
+                    </button>
+
+                  `
+
+                : `
+
+                    <p class="note">
+                      Horario habitual:
+                    </p>
+
+                    ${
+                      habitualRanges.length
+
+                        ? `
+                            <div class="slot-list">
+
+                              ${
+                                habitualRanges
+                                  .map(range=>`
+
+                                    <span
+                                      class="slot-btn"
+                                    >
+                                      ${range.startTime}
+                                      -
+                                      ${range.endTime}
+                                    </span>
+
+                                  `)
+                                  .join('')
+                              }
+
+                            </div>
+                          `
+
+                        : `
+                            <div class="empty">
+                              No hay horario
+                              habitual para este día.
+                            </div>
+                          `
+                    }
+                  `
+            }
+
+
+            <h4
+              style="
+                margin-top:18px;
+              "
+            >
+              ${
+                overrides.length
+                  ? 'Agregar otro rango especial'
+                  : 'Usar horario especial este día'
+              }
+            </h4>
+
+
+            ${
+              !overrides.length
+                ? `
+                    <p class="note">
+                      Al agregar el primer
+                      horario especial,
+                      reemplazará al horario
+                      habitual solamente
+                      para esta fecha.
+                    </p>
+                  `
+                : ''
+            }
+
+
+            <div class="inline-form">
+
+              <div class="f">
+
+                <label>
+                  Desde
+                </label>
+
+                <input
+                  type="time"
+                  id="override-start"
+                >
+
+              </div>
+
+
+              <div class="f">
+
+                <label>
+                  Hasta
+                </label>
+
+                <input
+                  type="time"
+                  id="override-end"
+                >
+
+              </div>
+
+
+              <button
+                class="mini-btn"
+                onclick="
+                  addDateOverride(
+                    '${iso}'
+                  )
+                "
               >
+                Agregar
+              </button>
+
             </div>
 
-            <button
-              class="mini-btn"
-              onclick="addSlot('${iso}')"
-            >
-              Agregar
-            </button>
           </div>
         `
         : ''
     }
 
-    <h3 style="font-size:16px;">
-      Solicitudes y clases este día
-    </h3>
 
+    <div
+      style="
+        border-top:
+          1px solid var(--line);
+        padding-top:18px;
+        margin-top:20px;
+      "
+    >
+
+      <h4>
+        Agregar clase manualmente
+      </h4>
+
+      ${
+        DB.students.length &&
+        DB.services.length
+
+          ? `
+
+              <div class="field">
+
+                <label>
+                  Alumna
+                </label>
+
+                <select
+                  id="manual-student"
+                >
+
+                  <option value="">
+                    Elegí una alumna
+                  </option>
+
+                  ${
+                    DB.students
+                      .slice()
+                      .sort((a,b)=>
+                        a.name.localeCompare(
+                          b.name
+                        )
+                      )
+                      .map(student=>`
+
+                        <option
+                          value="${student.id}"
+                        >
+                          ${escapeHTML(
+                            student.name
+                          )}
+                        </option>
+
+                      `)
+                      .join('')
+                  }
+
+                </select>
+
+              </div>
+
+
+              <div class="field">
+
+                <label>
+                  Clase
+                </label>
+
+                <select
+                  id="manual-service"
+                >
+
+                  <option value="">
+                    Elegí una clase
+                  </option>
+
+                  ${
+                    DB.services
+                      .map(service=>`
+
+                        <option
+                          value="${service.id}"
+                        >
+                          ${escapeHTML(
+                            service.name
+                          )}
+                        </option>
+
+                      `)
+                      .join('')
+                  }
+
+                </select>
+
+              </div>
+
+
+              <div class="field">
+
+                <label>
+                  Horario
+                </label>
+
+                <input
+                  type="time"
+                  id="manual-time"
+                >
+
+                <p class="note">
+                  Podés poner cualquier
+                  horario exacto.
+                  Ejemplo: 10:20.
+                </p>
+
+              </div>
+
+
+              <div class="field">
+
+                <label>
+                  Nota (opcional)
+                </label>
+
+                <input
+                  id="manual-note"
+                  placeholder="
+                    Ej: practicar estacionamiento
+                  "
+                >
+
+              </div>
+
+
+              <button
+                class="cta-btn small"
+                onclick="
+                  addManualClass(
+                    '${iso}'
+                  )
+                "
+              >
+                Agregar clase
+              </button>
+
+            `
+
+          : `
+              <div class="empty">
+                Para agregar una clase
+                manual necesitás tener
+                al menos una alumna y
+                una clase cargadas.
+              </div>
+            `
+      }
+
+    </div>
+
+
+    <div
+      style="
+        border-top:
+          1px solid var(--line);
+        padding-top:18px;
+        margin-top:22px;
+      "
+    >
+
+      <h4>
+        Solicitudes y clases
+      </h4>
+
+      <div
+  style="
+    margin-bottom:14px;
+  "
+>
+
+  <button
+    class="mini-btn"
+    onclick="
+      toggleClosedBookings()
+    "
+  >
     ${
-      bookingsDay.length
+      showClosedBookings
+        ? 'Ocultar rechazadas/canceladas'
+        : (
+            'Mostrar rechazadas/canceladas' +
+            (
+              closedBookings.length
+                ? ' (' +
+                  closedBookings.length +
+                  ')'
+                : ''
+            )
+          )
+    }
+  </button>
+
+</div>
+
+      ${
+        bookingsDay.length
+
+          ? `
+
+              <div class="table-scroll">
+
+                <table class="admin-table">
+
+                  <tr>
+                    <th>Hora</th>
+                    <th>Alumna</th>
+                    <th>Clase</th>
+                    <th>Estado</th>
+                    <th>Asistencia</th>
+                    <th></th>
+                  </tr>
+
+
+                  ${bookingsDay.map(
+                    booking=>`
+
+                      <tr>
+
+                        <td class="mono">
+
+  ${
+    booking.time
+
+      ? booking.time
+
+      : booking.preferredTime
+
         ? `
-          <div class="table-scroll">
-            <table class="admin-table">
-              <tr>
-                <th>Hora</th>
-                <th>Alumna</th>
-                <th>Servicio</th>
-                <th>Estado</th>
-                <th></th>
-              </tr>
+            ${booking.preferredTime}
 
-              ${
-                bookingsDay
-                  .map(booking=>`
-                    <tr>
-                      <td class="mono">
-                        ${booking.time}
-                      </td>
+            <br>
 
-                      <td>
-                        ${
-                          escapeHTML(
-                            booking.name
-                          )
-                        }
+            <span class="note">
+              Preferido
+            </span>
+          `
 
-                        <br>
+        : '—'
+  }
 
-                        <span class="note">
+</td>
+
+
+                        <td>
+
                           ${
                             escapeHTML(
-                              booking.phone
+                              booking.name
                             )
                           }
-                        </span>
-                      </td>
 
-                      <td>
-                        ${
-                          labelFor(
-                            booking.service
-                          )
-                        }
-                      </td>
+                          ${
+                            booking.phone
+                              ? `
+                                  <br>
 
-                      <td>
-                        <span
-                          class="
-                            pill
-                            ${booking.status}
-                          "
-                        >
+                                  <span class="note">
+                                    ${
+                                      escapeHTML(
+                                        booking.phone
+                                      )
+                                    }
+                                  </span>
+                                `
+                              : ''
+                          }
+
+                          ${
+                            booking.source ===
+                            'manual'
+                              ? `
+                                  <br>
+
+                                  <span class="note">
+                                    Clase agregada
+                                    manualmente
+                                  </span>
+                                `
+                              : ''
+                          }
+
+                        </td>
+
+
+                        <td>
+
+                          ${
+                            escapeHTML(
+                              labelFor(
+                                booking.service,
+                                booking.serviceName
+                              )
+                            )
+                          }
+
+                          ${
+                            booking.adminNote
+                              ? `
+                                  <br>
+
+                                  <span class="note">
+                                    ${
+                                      escapeHTML(
+                                        booking.adminNote
+                                      )
+                                    }
+                                  </span>
+                                `
+                              : ''
+                          }
+
+                          ${
+  booking.preferredTime
+
+    ? `
+        <br>
+
+        <span class="note">
+          Horario solicitado:
+          ${booking.preferredTime}
+        </span>
+      `
+
+    : ''
+}
+
+                        </td>
+
+
+                        <td>
+
+                          <span
+  class="
+    pill
+    ${
+      bookingStatusClass(
+        booking.status
+      )
+    }
+  "
+>
+  ${
+    bookingStatusLabel(
+      booking.status
+    )
+  }
+</span>
+
+                        </td>
+
+
+                        <td>
+
+                          ${
+                            booking.attendanceStatus ===
+                            'completed'
+                              ? `
+                                  <span
+                                    class="
+                                      pill
+                                      confirmed
+                                    "
+                                  >
+                                    Realizada
+                                  </span>
+                                `
+
+                              : booking.attendanceStatus ===
+                                'not_completed'
+                                ? `
+                                    <span
+                                      class="
+                                        pill
+                                        cancelled
+                                      "
+                                    >
+                                      No realizada
+                                    </span>
+                                  `
+
+                                : `
+                                    <span class="note">
+                                      Pendiente
+                                    </span>
+                                  `
+                          }
+
+                        </td>
+
+
+                        <td class="btnrow">
+
+
                           ${
                             booking.status ===
                             'pending'
-                              ? 'Pendiente'
-                              : booking.status ===
-                                'confirmed'
-                                ? 'Confirmada'
-                                : 'Cancelada'
+                              ? `
+
+                                  <button
+                                    class="mini-btn"
+                                    onclick="
+                                      changeBookingTime(
+                                        '${booking.id}'
+                                      )
+                                    "
+                                  >
+                                    Cambiar horario
+                                  </button>
+
+
+                                  <button
+                                    class="mini-btn ok"
+                                    onclick="
+                                      setBookingStatus(
+                                        '${booking.id}',
+                                        'confirmed'
+                                      )
+                                    "
+                                  >
+                                    Confirmar
+                                  </button>
+
+
+                                  <button
+                                    class="mini-btn no"
+                                    onclick="
+                                      setBookingStatus(
+                                        '${booking.id}',
+                                        'rejected'
+                                      )
+                                    "
+                                  >
+                                    Rechazar
+                                  </button>
+
+                                `
+                              : ''
                           }
-                        </span>
-                      </td>
 
-                      <td class="btnrow">
-                        ${
-                          booking.status ===
-                          'pending'
-                            ? `
-                              <button
-                                class="mini-btn ok"
-                                onclick="
-                                  setBookingStatus(
-                                    '${booking.id}',
-                                    'confirmed'
-                                  )
-                                "
-                              >
-                                Confirmar
-                              </button>
-                            `
-                            : ''
-                        }
 
-                        ${
-                          booking.status !==
-                          'cancelled'
-                            ? `
-                              <button
-                                class="mini-btn no"
-                                onclick="
-                                  setBookingStatus(
-                                    '${booking.id}',
-                                    'cancelled'
-                                  )
-                                "
-                              >
-                                Cancelar
-                              </button>
-                            `
-                            : ''
-                        }
+                          ${
+                            booking.status ===
+                            'confirmed'
+                              ? `
 
-                        <a
-                          class="mini-btn wa"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          href="${
-                            waLink(
-                              booking.phone,
-                              (
-                                'Hola ' +
-                                booking.name +
-                                '! Te escribimos por tu clase de manejo del ' +
-                                fmtDateHuman(
-                                  booking.date
-                                ) +
-                                ' a las ' +
-                                booking.time +
-                                '.'
-                              )
-                            )
-                          }"
-                        >
-                          WhatsApp
-                        </a>
-                      </td>
-                    </tr>
-                  `)
-                  .join('')
-              }
-            </table>
-          </div>
-        `
-        : `
-          <div class="empty">
-            No hay turnos solicitados
-            para este día.
-          </div>
-        `
-    }
+                                  <button
+                                    class="mini-btn"
+                                    onclick="
+                                      changeBookingTime(
+                                        '${booking.id}'
+                                      )
+                                    "
+                                  >
+                                    Cambiar horario
+                                  </button>
+
+
+                                  <button
+                                    class="mini-btn ok"
+                                    onclick="
+                                      setBookingAttendance(
+                                        '${booking.id}',
+                                        'completed'
+                                      )
+                                    "
+                                  >
+                                    Realizada
+                                  </button>
+
+
+                                  <button
+                                    class="mini-btn"
+                                    onclick="
+                                      setBookingAttendance(
+                                        '${booking.id}',
+                                        'not_completed'
+                                      )
+                                    "
+                                  >
+                                    No realizada
+                                  </button>
+
+
+                                  <button
+                                    class="mini-btn no"
+                                    onclick="
+                                      setBookingStatus(
+                                        '${booking.id}',
+                                        'cancelled'
+                                      )
+                                    "
+                                  >
+                                    Cancelar
+                                  </button>
+
+                                `
+                              : ''
+                          }
+
+
+                          ${
+                            booking.phone &&
+bookingOccupiesSlot(
+  booking
+)
+
+                              ? `
+
+                                  <a
+                                    class="mini-btn wa"
+                                    target="_blank"
+                                    rel="
+                                      noopener noreferrer
+                                    "
+                                    href="${
+                                      waLink(
+  booking.phone,
+  bookingWhatsAppText(
+    booking
+  )
+)
+                                    }"
+                                  >
+                                    WhatsApp
+                                  </a>
+
+                                `
+                              : ''
+                          }
+
+                        </td>
+
+                      </tr>
+
+                    `
+                  ).join('')}
+
+                </table>
+
+              </div>
+
+            `
+
+          : `
+              <div class="empty">
+                No hay solicitudes ni
+                clases para este día.
+              </div>
+            `
+      }
+
+    </div>
   `;
-}
-
-async function toggleBlockDay(
-  iso,
-  value
-){
-  try{
-    let result;
-
-    if(value){
-      result =
-        await supabaseClient
-          .from('blocked_days')
-          .upsert({
-            class_date: iso,
-            reason: ''
-          });
-    }else{
-      result =
-        await supabaseClient
-          .from('blocked_days')
-          .delete()
-          .eq(
-            'class_date',
-            iso
-          );
-    }
-
-    if(result.error){
-      throw result.error;
-    }
-
-    await loadAdminData();
-    drawAdminCalendar();
-  }catch(error){
-    showDatabaseError(
-      error,
-      'No se pudo actualizar el bloqueo del día.'
-    );
-  }
-}
-
-async function addSlot(iso){
-  const input =
-    document.getElementById(
-      'new-slot-time'
-    );
-
-  const time =
-    input.value;
-
-  if(!time){
-    return;
-  }
-
-  try{
-    const { error } =
-      await supabaseClient
-        .from('availability')
-        .insert({
-          class_date: iso,
-          class_time: time
-        });
-
-    if(
-      error &&
-      error.code !== '23505'
-    ){
-      throw error;
-    }
-
-    input.value = '';
-
-    await loadAdminData();
-    drawAdminCalendar();
-  }catch(error){
-    showDatabaseError(
-      error,
-      'No se pudo agregar el horario.'
-    );
-  }
-}
-
-async function removeSlot(
-  iso,
-  time
-){
-  try{
-    const { error } =
-      await supabaseClient
-        .from('availability')
-        .delete()
-        .eq(
-          'class_date',
-          iso
-        )
-        .eq(
-          'class_time',
-          time
-        );
-
-    if(error){
-      throw error;
-    }
-
-    await loadAdminData();
-    drawAdminCalendar();
-  }catch(error){
-    showDatabaseError(
-      error,
-      'No se pudo eliminar el horario.'
-    );
-  }
-}
-
-async function setBookingStatus(
-  id,
-  status
-){
-  try{
-    const { error } =
-      await supabaseClient
-        .from('bookings')
-        .update({
-          status,
-          updated_at:
-            new Date().toISOString()
-        })
-        .eq('id', id);
-
-    if(error){
-      throw error;
-    }
-
-    await loadAdminData();
-    renderAdminDayPanel();
-    drawAdminCalendar();
-  }catch(error){
-    showDatabaseError(
-      error,
-      'No se pudo actualizar el estado de la reserva.'
-    );
-  }
 }
 
 /* ==================================================================
    ADMINISTRADOR: ALUMNAS
    ================================================================== */
 
+
+function observationsForStudent(
+  studentId
+){
+
+  return (
+    DB.studentObservations || []
+  )
+    .filter(item=>
+      item.studentId === studentId
+    )
+    .sort((a,b)=>{
+
+      const dateA =
+        a.date || '';
+
+      const dateB =
+        b.date || '';
+
+      if(dateA !== dateB){
+        return dateB.localeCompare(
+          dateA
+        );
+      }
+
+      return String(
+        b.createdAt || ''
+      ).localeCompare(
+        String(
+          a.createdAt || ''
+        )
+      );
+    });
+}
+
 function renderAdminStudents(){
+
   document
     .getElementById(
       'admin-main'
     )
     .innerHTML = `
+
       <h2>
         Fichas de alumnas
       </h2>
@@ -4197,34 +7183,50 @@ function renderAdminStudents(){
         class="lede"
         style="margin-bottom:22px;"
       >
-        Datos de contacto, clases
-        tomadas y progreso de cada
-        alumna.
+        Datos de contacto,
+        clases tomadas,
+        progreso y observaciones
+        de cada alumna.
       </p>
 
+
       <div class="panel">
+
         <h3>
           Agregar alumna
         </h3>
 
+
         <div class="inline-form">
+
           <div class="f">
+
             <label>
               Nombre
             </label>
 
-            <input id="st-name">
+            <input
+              id="st-name"
+            >
+
           </div>
 
+
           <div class="f">
+
             <label>
               Teléfono
             </label>
 
-            <input id="st-phone">
+            <input
+              id="st-phone"
+            >
+
           </div>
 
+
           <div class="f">
+
             <label>
               Clases tomadas
             </label>
@@ -4236,18 +7238,25 @@ function renderAdminStudents(){
               value="0"
               style="width:90px;"
             >
+
           </div>
 
+
           <div class="f">
+
             <label>
               Progreso
             </label>
 
             <input
               id="st-progress"
-              placeholder="Ej: recién empieza"
+              placeholder="
+                Ej: recién empieza
+              "
             >
+
           </div>
+
 
           <button
             class="mini-btn"
@@ -4255,101 +7264,351 @@ function renderAdminStudents(){
           >
             Agregar
           </button>
+
         </div>
+
       </div>
 
-      <div class="table-scroll">
-        <table class="admin-table">
-          <tr>
-            <th>Nombre</th>
-            <th>Teléfono</th>
-            <th>Clases tomadas</th>
-            <th>Progreso</th>
-            <th></th>
-          </tr>
 
-          ${
-            DB.students.length
-              ? DB.students
-                  .map(student=>`
-                    <tr>
-                      <td>
-                        ${
-                          escapeHTML(
-                            student.name
-                          )
-                        }
-                      </td>
+      ${
+        DB.students.length
 
-                      <td>
-                        ${
-                          escapeHTML(
-                            student.phone
-                          )
-                        }
-                      </td>
+          ? DB.students
+              .slice()
+              .sort((a,b)=>
+                a.name.localeCompare(
+                  b.name
+                )
+              )
+              .map(student=>{
 
-                      <td class="mono">
-                        ${
-                          student.classesTaken
-                        }
-                      </td>
+                const observations =
+                  observationsForStudent(
+                    student.id
+                  );
 
-                      <td
-                        style="
-                          max-width:260px;
-                        "
-                      >
-                        ${
-                          escapeHTML(
-                            student.progress
-                          )
-                        }
-                      </td>
+                return `
 
-                      <td class="btnrow">
-                        <button
-                          class="mini-btn ok"
-                          onclick="
-                            bumpClasses(
-                              '${student.id}'
-                            )
+                  <div
+                    class="panel"
+                    style="
+                      margin-bottom:18px;
+                    "
+                  >
+
+
+                    <div
+                      style="
+                        display:flex;
+                        justify-content:
+                          space-between;
+                        gap:16px;
+                        flex-wrap:wrap;
+                        align-items:flex-start;
+                      "
+                    >
+
+
+                      <div>
+
+                        <h3
+                          style="
+                            margin-bottom:5px;
                           "
                         >
-                          +1 clase
-                        </button>
+                          ${
+                            escapeHTML(
+                              student.name
+                            )
+                          }
+                        </h3>
+
+
+                        ${
+                          student.phone
+
+                            ? `
+                                <p
+                                  class="note"
+                                  style="
+                                    margin:
+                                      0 0 5px;
+                                  "
+                                >
+                                  Teléfono:
+                                  ${
+                                    escapeHTML(
+                                      student.phone
+                                    )
+                                  }
+                                </p>
+                              `
+
+                            : ''
+                        }
+
+
+                        ${
+                          student.progress
+
+                            ? `
+                                <p
+                                  class="note"
+                                  style="
+                                    margin:0;
+                                  "
+                                >
+                                  Progreso:
+                                  ${
+                                    escapeHTML(
+                                      student.progress
+                                    )
+                                  }
+                                </p>
+                              `
+
+                            : ''
+                        }
+
+                      </div>
+
+
+                      <button
+                        class="mini-btn no"
+                        onclick="
+                          removeStudent(
+                            '${student.id}'
+                          )
+                        "
+                      >
+                        Eliminar ficha
+                      </button>
+
+                    </div>
+
+
+
+                    <div
+                      style="
+                        border-top:
+                          1px solid
+                          var(--line);
+                        margin-top:16px;
+                        padding-top:16px;
+                      "
+                    >
+
+                      <h4>
+                        Clases tomadas
+                      </h4>
+
+
+                      <div
+                        style="
+                          display:flex;
+                          align-items:center;
+                          gap:12px;
+                          flex-wrap:wrap;
+                        "
+                      >
+
 
                         <button
                           class="mini-btn no"
                           onclick="
-                            removeStudent(
-                              '${student.id}'
+                            changeClasses(
+                              '${student.id}',
+                              -1
+                            )
+                          "
+                          ${
+                            student.classesTaken <= 0
+                              ? 'disabled'
+                              : ''
+                          }
+                        >
+                          −1
+                        </button>
+
+
+                        <strong
+                          class="mono"
+                          style="
+                            font-size:22px;
+                            min-width:32px;
+                            text-align:center;
+                          "
+                        >
+                          ${
+                            student.classesTaken
+                          }
+                        </strong>
+
+
+                        <button
+                          class="mini-btn ok"
+                          onclick="
+                            changeClasses(
+                              '${student.id}',
+                              1
                             )
                           "
                         >
-                          Eliminar
+                          +1
                         </button>
-                      </td>
-                    </tr>
-                  `)
-                  .join('')
-              : `
-                <tr>
-                  <td colspan="5">
-                    <div class="empty">
-                      Todavía no cargaste
-                      alumnas.
+
+                      </div>
+
+
+                      <p
+                        class="note"
+                        style="
+                          margin-top:8px;
+                          margin-bottom:0;
+                        "
+                      >
+                        Las clases marcadas
+                        como realizadas en la
+                        Agenda se suman
+                        automáticamente.
+                        Estos botones sirven
+                        para hacer una
+                        corrección manual.
+                      </p>
+
                     </div>
-                  </td>
-                </tr>
-              `
-          }
-        </table>
-      </div>
+
+
+
+                    <div
+                      style="
+                        border-top:
+                          1px solid
+                          var(--line);
+                        margin-top:18px;
+                        padding-top:18px;
+                      "
+                    >
+
+                      <h4>
+                        Observaciones
+                      </h4>
+
+
+                      <div class="field">
+
+                        <label>
+                          Nueva observación
+                        </label>
+
+                        <textarea
+  id="student-observation-${student.id}"
+  rows="3"
+  placeholder="Ej: hoy practicó estacionamiento y necesita reforzar el uso de espejos."
+></textarea>
+
+                      </div>
+
+
+                      <button
+                        class="mini-btn"
+                        onclick="
+                          addStudentObservation(
+                            '${student.id}'
+                          )
+                        "
+                      >
+                        Agregar observación
+                      </button>
+
+
+                      <div
+                        style="
+                          margin-top:18px;
+                        "
+                      >
+
+                        ${
+                          observations.length
+
+                            ? observations
+                                .map(item=>`
+
+                                  <div
+                                    style="
+                                      border:
+                                        1px solid
+                                        var(--line);
+                                      border-radius:
+                                        12px;
+                                      padding:
+                                        12px 14px;
+                                      margin-bottom:
+                                        10px;
+                                      background:
+                                        var(--cream-dim);
+                                    "
+                                  >
+
+                                    <div
+                                      class="note"
+                                      style="
+                                        margin-bottom:
+                                          6px;
+                                      "
+                                    >
+                                      ${
+                                        item.date
+                                          ? fmtDateHuman(
+                                              item.date
+                                            )
+                                          : ''
+                                      }
+                                    </div>
+
+
+                                    <div>
+                                      ${
+                                        escapeHTML(
+                                          item.observation
+                                        )
+                                      }
+                                    </div>
+
+                                  </div>
+
+                                `)
+                                .join('')
+
+                            : `
+                                <div class="empty">
+                                  Todavía no hay
+                                  observaciones para
+                                  esta alumna.
+                                </div>
+                              `
+                        }
+
+                      </div>
+
+                    </div>
+
+                  </div>
+                `;
+              })
+              .join('')
+
+          : `
+              <div class="empty">
+                Todavía no cargaste alumnas.
+              </div>
+            `
+      }
     `;
 }
 
 async function addStudent(){
+
   const name =
     document
       .getElementById(
@@ -4358,15 +7617,39 @@ async function addStudent(){
       .value
       .trim();
 
+
   if(!name){
+
+    alert(
+      'Escribí el nombre de la alumna.'
+    );
+
     return;
   }
 
+
+  const classesTaken =
+    Math.max(
+      0,
+      Number(
+        document
+          .getElementById(
+            'st-classes'
+          )
+          .value
+      ) || 0
+    );
+
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('students')
+
         .insert({
+
           name,
 
           phone:
@@ -4378,13 +7661,7 @@ async function addStudent(){
               .trim(),
 
           classes_taken:
-            Number(
-              document
-                .getElementById(
-                  'st-classes'
-                )
-                .value
-            ) || 0,
+            classesTaken,
 
           progress:
             document
@@ -4393,86 +7670,1321 @@ async function addStudent(){
               )
               .value
               .trim()
+
         });
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminStudents();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
       'No se pudo agregar la alumna.'
     );
+
   }
 }
 
-async function bumpClasses(id){
+async function changeClasses(
+  id,
+  amount
+){
+
   const student =
     DB.students.find(
       item=>item.id === id
     );
 
+
   if(!student){
     return;
   }
 
+
+  const newTotal =
+    Math.max(
+      0,
+      student.classesTaken +
+      amount
+    );
+
+
+  /*
+    Si ya está en cero y se toca -1,
+    no hacemos nada.
+  */
+  if(
+    newTotal ===
+      student.classesTaken
+  ){
+    return;
+  }
+
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('students')
+
         .update({
+
           classes_taken:
-            student.classesTaken + 1,
+            newTotal,
 
           updated_at:
-            new Date().toISOString()
+            new Date()
+              .toISOString()
+
         })
-        .eq('id', id);
+
+        .eq(
+          'id',
+          id
+        );
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminStudents();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
       'No se pudo actualizar la cantidad de clases.'
     );
+
+  }
+}
+
+async function addStudentObservation(
+  studentId
+){
+
+  const textarea =
+    document.getElementById(
+      'student-observation-' +
+      studentId
+    );
+
+
+  if(!textarea){
+    return;
+  }
+
+
+  const observation =
+    textarea.value.trim();
+
+
+  if(!observation){
+
+    alert(
+      'Escribí una observación.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from(
+          'student_observations'
+        )
+
+        .insert({
+
+          student_id:
+            studentId,
+
+          observation,
+
+          observation_date:
+            todayISO()
+
+        });
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminStudents();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo guardar la observación.'
+    );
+
   }
 }
 
 async function removeStudent(id){
+
+  const student =
+    DB.students.find(
+      item=>item.id === id
+    );
+
+
+  if(!student){
+    return;
+  }
+
+
   if(
     !confirm(
-      '¿Querés eliminar esta ficha de alumna?'
+      '¿Querés eliminar la ficha de ' +
+      student.name +
+      '?'
     )
   ){
     return;
   }
 
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('students')
+
         .delete()
-        .eq('id', id);
+
+        .eq(
+          'id',
+          id
+        );
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminStudents();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
       'No se pudo eliminar la alumna.'
     );
+
+  }
+}
+
+/* ==================================================================
+   ADMINISTRADOR: PAGOS
+   ================================================================== */
+
+function paymentMethodLabel(method){
+
+  if(method === 'cash'){
+    return 'Efectivo';
+  }
+
+  if(method === 'transfer'){
+    return 'Transferencia';
+  }
+
+  return method || '-';
+}
+
+let paymentFilters = {
+  studentId: '',
+  from: '',
+  to: ''
+};
+
+
+function paymentPassesFilters(item){
+
+  if(
+    paymentFilters.studentId &&
+    item.studentId !==
+      paymentFilters.studentId
+  ){
+    return false;
+  }
+
+
+  if(
+    paymentFilters.from &&
+    item.date <
+      paymentFilters.from
+  ){
+    return false;
+  }
+
+
+  if(
+    paymentFilters.to &&
+    item.date >
+      paymentFilters.to
+  ){
+    return false;
+  }
+
+
+  return true;
+}
+
+
+function applyPaymentFilters(){
+
+  paymentFilters.studentId =
+    document
+      .getElementById(
+        'payment-filter-student'
+      )
+      ?.value || '';
+
+
+  paymentFilters.from =
+    document
+      .getElementById(
+        'payment-filter-from'
+      )
+      ?.value || '';
+
+
+  paymentFilters.to =
+    document
+      .getElementById(
+        'payment-filter-to'
+      )
+      ?.value || '';
+
+
+  renderAdminPayments();
+}
+
+
+function clearPaymentFilters(){
+
+  paymentFilters = {
+    studentId: '',
+    from: '',
+    to: ''
+  };
+
+
+  renderAdminPayments();
+}
+
+function renderAdminPayments(){
+
+  const allPendingDues =
+  (DB.paymentDues || [])
+    .filter(item=>
+      item.status === 'pending'
+    );
+
+
+const pendingDues =
+  allPendingDues
+    .filter(
+      paymentPassesFilters
+    );
+
+
+const filteredPayments =
+  (DB.payments || [])
+    .filter(
+      paymentPassesFilters
+    );
+
+
+const pendingTotal =
+  allPendingDues.reduce(
+    (total,item)=>
+      total + item.amount,
+    0
+  );
+
+
+  document
+    .getElementById(
+      'admin-main'
+    )
+    .innerHTML = `
+
+      <h2>
+        Pagos
+      </h2>
+
+      <p
+        class="lede"
+        style="margin-bottom:22px;"
+      >
+        Registrá los pagos reales
+        recibidos y los saldos que
+        todavía quedan pendientes.
+      </p>
+
+
+      <div class="stat-grid">
+
+        <div class="stat-card">
+
+          <div class="num">
+            ${
+              fmtMoney(
+                (DB.payments || [])
+                  .reduce(
+                    (total,item)=>
+                      total + item.amount,
+                    0
+                  )
+              )
+            }
+          </div>
+
+          <div class="lbl">
+            Total registrado
+          </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+          <div class="num">
+            ${fmtMoney(pendingTotal)}
+          </div>
+
+          <div class="lbl">
+            Pendiente de cobro
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="panel">
+
+  <h3>
+    Filtrar movimientos
+  </h3>
+
+
+  <div class="inline-form">
+
+    <div class="f">
+
+      <label>
+        Alumna
+      </label>
+
+      <select
+        id="payment-filter-student"
+      >
+
+        <option value="">
+          Todas las alumnas
+        </option>
+
+        ${
+          DB.students
+            .slice()
+            .sort((a,b)=>
+              a.name.localeCompare(
+                b.name
+              )
+            )
+            .map(student=>`
+
+              <option
+                value="${student.id}"
+                ${
+                  paymentFilters.studentId ===
+                    student.id
+                    ? 'selected'
+                    : ''
+                }
+              >
+                ${
+                  escapeHTML(
+                    student.name
+                  )
+                }
+              </option>
+
+            `)
+            .join('')
+        }
+
+      </select>
+
+    </div>
+
+
+    <div class="f">
+
+      <label>
+        Desde
+      </label>
+
+      <input
+        id="payment-filter-from"
+        type="date"
+        value="${paymentFilters.from}"
+      >
+
+    </div>
+
+
+    <div class="f">
+
+      <label>
+        Hasta
+      </label>
+
+      <input
+        id="payment-filter-to"
+        type="date"
+        value="${paymentFilters.to}"
+      >
+
+    </div>
+
+
+    <button
+      class="mini-btn"
+      onclick="applyPaymentFilters()"
+    >
+      Aplicar filtros
+    </button>
+
+
+    <button
+      class="mini-btn"
+      onclick="clearPaymentFilters()"
+    >
+      Limpiar
+    </button>
+
+  </div>
+
+</div>
+
+      <div class="panel">
+
+        <h3>
+          Registrar pago
+        </h3>
+
+
+        ${
+          DB.students.length
+
+            ? `
+
+                <div class="inline-form">
+
+
+                  <div class="f">
+
+                    <label>
+                      Alumna
+                    </label>
+
+                    <select
+                      id="payment-student"
+                    >
+
+                      <option value="">
+                        Elegí una alumna
+                      </option>
+
+                      ${
+                        DB.students
+                          .slice()
+                          .sort((a,b)=>
+                            a.name.localeCompare(
+                              b.name
+                            )
+                          )
+                          .map(student=>`
+
+                            <option
+                              value="${student.id}"
+                            >
+                              ${
+                                escapeHTML(
+                                  student.name
+                                )
+                              }
+                            </option>
+
+                          `)
+                          .join('')
+                      }
+
+                    </select>
+
+                  </div>
+
+
+                  <div class="f">
+
+                    <label>
+                      Monto
+                    </label>
+
+                    <input
+  id="payment-amount"
+  type="text"
+  inputmode="decimal"
+  placeholder="Ej: 15.000"
+  oninput="formatMoneyField(this)"
+>
+
+                  </div>
+
+
+                  <div class="f">
+
+                    <label>
+                      Medio de pago
+                    </label>
+
+                    <select
+                      id="payment-method"
+                    >
+
+                      <option value="cash">
+                        Efectivo
+                      </option>
+
+                      <option value="transfer">
+                        Transferencia
+                      </option>
+
+                    </select>
+
+                  </div>
+
+
+                  <div class="f">
+
+                    <label>
+                      Fecha
+                    </label>
+
+                    <input
+                      id="payment-date"
+                      type="date"
+                      value="${todayISO()}"
+                    >
+
+                  </div>
+
+                </div>
+
+
+                <div class="field">
+
+                  <label>
+                    Descripción (opcional)
+                  </label>
+
+                  <input
+                    id="payment-description"
+                    placeholder="Ej: pago de 3 clases"
+                  >
+
+                </div>
+
+
+                <button
+                  class="cta-btn small"
+                  onclick="addPayment()"
+                >
+                  Registrar pago
+                </button>
+
+              `
+
+            : `
+                <div class="empty">
+                  Primero necesitás cargar
+                  una alumna.
+                </div>
+              `
+        }
+
+      </div>
+
+
+
+      <div class="panel">
+
+        <h3>
+          Registrar saldo pendiente
+        </h3>
+
+
+        ${
+          DB.students.length
+
+            ? `
+
+                <div class="inline-form">
+
+
+                  <div class="f">
+
+                    <label>
+                      Alumna
+                    </label>
+
+                    <select
+                      id="due-student"
+                    >
+
+                      <option value="">
+                        Elegí una alumna
+                      </option>
+
+                      ${
+                        DB.students
+                          .slice()
+                          .sort((a,b)=>
+                            a.name.localeCompare(
+                              b.name
+                            )
+                          )
+                          .map(student=>`
+
+                            <option
+                              value="${student.id}"
+                            >
+                              ${
+                                escapeHTML(
+                                  student.name
+                                )
+                              }
+                            </option>
+
+                          `)
+                          .join('')
+                      }
+
+                    </select>
+
+                  </div>
+
+
+                  <div class="f">
+
+                    <label>
+                      Monto pendiente
+                    </label>
+
+                    <input
+  id="due-amount"
+  type="text"
+  inputmode="decimal"
+  placeholder="Ej: 10.000"
+  oninput="formatMoneyField(this)"
+>
+
+                  </div>
+
+
+                  <div class="f">
+
+                    <label>
+                      Fecha
+                    </label>
+
+                    <input
+                      id="due-date"
+                      type="date"
+                      value="${todayISO()}"
+                    >
+
+                  </div>
+
+                </div>
+
+
+                <div class="field">
+
+                  <label>
+                    Descripción
+                  </label>
+
+                  <input
+                    id="due-description"
+                    placeholder="Ej: resta abonar una clase"
+                  >
+
+                </div>
+
+
+                <button
+                  class="cta-btn small"
+                  onclick="addPaymentDue()"
+                >
+                  Registrar pendiente
+                </button>
+
+              `
+
+            : ''
+        }
+
+      </div>
+
+
+
+      <div class="panel">
+
+        <h3>
+          Saldos pendientes
+        </h3>
+
+
+        ${
+          pendingDues.length
+
+            ? `
+
+                <div class="table-scroll">
+
+                  <table class="admin-table">
+
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Alumna</th>
+                      <th>Descripción</th>
+                      <th>Monto</th>
+                      <th></th>
+                    </tr>
+
+
+                    ${pendingDues.map(item=>`
+
+                      <tr>
+
+                        <td>
+                          ${
+                            item.date
+                              ? fmtDateHuman(
+                                  item.date
+                                )
+                              : '-'
+                          }
+                        </td>
+
+
+                        <td>
+                          ${
+                            escapeHTML(
+                              item.studentName
+                            )
+                          }
+                        </td>
+
+
+                        <td>
+                          ${
+                            escapeHTML(
+                              item.description
+                            )
+                          }
+                        </td>
+
+
+                        <td class="mono">
+                          ${fmtMoney(item.amount)}
+                        </td>
+
+
+                        <td class="btnrow">
+
+                          <button
+                            class="mini-btn ok"
+                            onclick="
+                              resolvePaymentDue(
+                                '${item.id}'
+                              )
+                            "
+                          >
+                            Marcar como resuelto
+                          </button>
+
+                        </td>
+
+                      </tr>
+
+                    `).join('')}
+
+                  </table>
+
+                </div>
+
+              `
+
+            : `
+                <div class="empty">
+                  No hay saldos pendientes.
+                </div>
+              `
+        }
+
+      </div>
+
+
+
+      <div class="panel">
+
+        <h3>
+          Historial de pagos
+        </h3>
+
+
+        ${
+          filteredPayments.length
+
+            ? `
+
+                <div class="table-scroll">
+
+                  <table class="admin-table">
+
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Alumna</th>
+                      <th>Medio</th>
+                      <th>Descripción</th>
+                      <th>Monto</th>
+                    </tr>
+
+
+                    ${
+                      filteredPayments
+                        .map(payment=>`
+
+                          <tr>
+
+                            <td>
+                              ${
+                                payment.date
+                                  ? fmtDateHuman(
+                                      payment.date
+                                    )
+                                  : '-'
+                              }
+                            </td>
+
+
+                            <td>
+                              ${
+                                escapeHTML(
+                                  payment.studentName
+                                )
+                              }
+                            </td>
+
+
+                            <td>
+                              ${
+                                paymentMethodLabel(
+                                  payment.method
+                                )
+                              }
+                            </td>
+
+
+                            <td>
+                              ${
+                                escapeHTML(
+                                  payment.description
+                                )
+                              }
+                            </td>
+
+
+                            <td class="mono">
+                              ${
+                                fmtMoney(
+                                  payment.amount
+                                )
+                              }
+                            </td>
+
+                          </tr>
+
+                        `)
+                        .join('')
+                    }
+
+                  </table>
+
+                </div>
+
+              `
+
+            : `
+                <div class="empty">
+                  Todavía no hay pagos registrados.
+                </div>
+              `
+        }
+
+      </div>
+    `;
+}
+
+
+
+async function addPayment(){
+
+  const studentId =
+    document
+      .getElementById(
+        'payment-student'
+      )
+      .value;
+
+
+  const student =
+    DB.students.find(
+      item=>item.id === studentId
+    );
+
+
+  const amount =
+  parseMoneyInput(
+    document
+      .getElementById(
+        'payment-amount'
+      )
+      .value
+  );
+
+
+  const method =
+    document
+      .getElementById(
+        'payment-method'
+      )
+      .value;
+
+
+  const date =
+    document
+      .getElementById(
+        'payment-date'
+      )
+      .value;
+
+
+  const description =
+    document
+      .getElementById(
+        'payment-description'
+      )
+      .value
+      .trim();
+
+
+  if(!student){
+
+    alert(
+      'Elegí una alumna.'
+    );
+
+    return;
+  }
+
+
+  if(
+    !amount ||
+    amount <= 0
+  ){
+
+    alert(
+      'Ingresá un monto válido.'
+    );
+
+    return;
+  }
+
+
+  if(!date){
+
+    alert(
+      'Elegí la fecha del pago.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('payments')
+
+        .insert({
+
+          student_id:
+            student.id,
+
+          student_name:
+            student.name,
+
+          amount,
+
+          payment_method:
+            method,
+
+          payment_date:
+            date,
+
+          description
+
+        });
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminPayments();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo registrar el pago.'
+    );
+
+  }
+}
+
+
+
+async function addPaymentDue(){
+
+  const studentId =
+    document
+      .getElementById(
+        'due-student'
+      )
+      .value;
+
+
+  const student =
+    DB.students.find(
+      item=>item.id === studentId
+    );
+
+
+  const amount =
+  parseMoneyInput(
+    document
+      .getElementById(
+        'due-amount'
+      )
+      .value
+  );
+
+
+  const date =
+    document
+      .getElementById(
+        'due-date'
+      )
+      .value;
+
+
+  const description =
+    document
+      .getElementById(
+        'due-description'
+      )
+      .value
+      .trim();
+
+
+  if(!student){
+
+    alert(
+      'Elegí una alumna.'
+    );
+
+    return;
+  }
+
+
+  if(
+    !amount ||
+    amount <= 0
+  ){
+
+    alert(
+      'Ingresá un monto pendiente válido.'
+    );
+
+    return;
+  }
+
+
+  if(!date){
+
+    alert(
+      'Elegí la fecha.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('payment_dues')
+
+        .insert({
+
+          student_id:
+            student.id,
+
+          student_name:
+            student.name,
+
+          amount,
+
+          description,
+
+          due_date:
+            date,
+
+          status:
+            'pending'
+
+        });
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminPayments();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo registrar el saldo pendiente.'
+    );
+
+  }
+}
+
+
+
+async function resolvePaymentDue(id){
+
+  if(
+    !confirm(
+      '¿Confirmás que este saldo ya fue resuelto?'
+    )
+  ){
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('payment_dues')
+
+        .update({
+
+          status:
+            'resolved',
+
+          resolved_at:
+            new Date()
+              .toISOString()
+
+        })
+
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminPayments();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo actualizar el saldo pendiente.'
+    );
+
   }
 }
 
@@ -5200,644 +9712,913 @@ async function saveReply(id){
   }
 }
 
-/* ==================================================================
-   ADMINISTRADOR: PRECIOS Y PROMOCIONES
-   ================================================================== */
+/* ---------- CLASES Y PROMOCIONES ---------- */
+
+function optionalPriceValue(inputId){
+
+  const input =
+    document.getElementById(
+      inputId
+    );
+
+
+  if(!input){
+    return null;
+  }
+
+
+  if(
+    input.value.trim() === ''
+  ){
+    return null;
+  }
+
+
+  const number =
+    parseMoneyInput(
+      input.value
+    );
+
+
+  if(
+    number === null ||
+    number < 0
+  ){
+    return null;
+  }
+
+
+  return number;
+}
 
 function renderAdminPricing(){
-  const services = DB.services;
 
-  document
-    .getElementById(
-      'admin-main'
-    )
-    .innerHTML = `
-      <h2>
-        Precios y promociones
-      </h2>
+  document.getElementById(
+    'admin-main'
+  ).innerHTML = `
 
-      <p
-        class="lede"
-        style="margin-bottom:22px;"
-      >
-        Actualizá tus precios y activá
-        o quitá promociones cuando
-        quieras.
-      </p>
+    <h2>
+      Clases y promociones
+    </h2>
 
-      <div class="panel">
-        <h3>
-          Clase suelta
-        </h3>
+    <p
+      class="lede"
+      style="margin-bottom:22px;"
+    >
+      Administrá las clases que ofrecés,
+      sus precios y promociones.
+      El precio es opcional.
+    </p>
 
-        <div class="inline-form">
-          <div class="f">
-            <label>Precio</label>
 
-            <input
-              type="number"
-              id="price-suelta"
-              value="${
-                services.suelta.price
-              }"
-              style="width:140px;"
-            >
-          </div>
+    <div class="panel">
 
-          <div
-            class="f"
-            style="
-              flex:1;
-              min-width:220px;
-            "
-          >
-            <label>
-              Descripción
-            </label>
+      <h3>
+        Clases
+      </h3>
 
-            <input
-              id="desc-suelta"
-              value="${
-                escapeHTML(
-                  services.suelta.desc
-                )
-              }"
-            >
-          </div>
+      <div class="table-scroll">
 
-          <button
-            class="mini-btn"
-            onclick="
-              saveServiceSuelta()
-            "
-          >
-            Guardar
-          </button>
-        </div>
-      </div>
+        <table class="admin-table">
 
-      <div class="panel">
-        <h3>
-          Curso integral -
-          Mi Primera Licencia
-        </h3>
+          <tr>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Precio</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
 
-        <div class="inline-form">
-          <div class="f">
-            <label>
-              Precio
-            </label>
 
-            <input
-              type="number"
-              id="price-curso"
-              value="${
-                services.curso.price
-              }"
-              style="width:140px;"
-            >
-          </div>
+          ${
+            DB.services.map(service=>`
 
-          <div
-            class="f"
-            style="
-              flex:1;
-              min-width:220px;
-            "
-          >
-            <label>
-              Descripción
-            </label>
+              <tr>
 
-            <input
-              id="desc-curso"
-              value="${
-                escapeHTML(
-                  services.curso.desc
-                )
-              }"
-            >
-          </div>
+                <td>
 
-          <button
-            class="mini-btn"
-            onclick="
-              saveServiceCurso()
-            "
-          >
-            Guardar
-          </button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3>
-          Packs de clases
-        </h3>
-
-        <div class="table-scroll">
-          <table class="admin-table">
-            <tr>
-              <th>Nombre</th>
-              <th>Cant. clases</th>
-              <th>Precio</th>
-              <th></th>
-            </tr>
-
-            ${
-              services.packs
-                .map(pack=>`
-                  <tr>
-                    <td>
-                      <input
-                        id="
-                          pack-name-${pack.id}
-                        "
-                        value="${
-                          escapeHTML(
-                            pack.name
-                          )
-                        }"
-                        style="width:100%;"
-                      >
-                    </td>
-
-                    <td>
-                      <input
-                        type="number"
-                        id="
-                          pack-classes-${pack.id}
-                        "
-                        value="${pack.classes}"
-                        style="width:70px;"
-                      >
-                    </td>
-
-                    <td>
-                      <input
-                        type="number"
-                        id="
-                          pack-price-${pack.id}
-                        "
-                        value="${pack.price}"
-                        style="width:110px;"
-                      >
-                    </td>
-
-                    <td class="btnrow">
-                      <button
-                        class="mini-btn"
-                        onclick="
-                          savePack(
-                            '${pack.id}'
-                          )
-                        "
-                      >
-                        Guardar
-                      </button>
-
-                      <button
-                        class="mini-btn no"
-                        onclick="
-                          removePack(
-                            '${pack.id}'
-                          )
-                        "
-                      >
-                        Eliminar
-                      </button>
-                    </td>
-                  </tr>
-                `)
-                .join('')
-            }
-          </table>
-        </div>
-
-        <div
-          class="inline-form"
-          style="margin-top:14px;"
-        >
-          <div class="f">
-            <label>
-              Nombre
-            </label>
-
-            <input
-              id="new-pack-name"
-              placeholder="Pack 8 clases"
-            >
-          </div>
-
-          <div class="f">
-            <label>
-              Cant. clases
-            </label>
-
-            <input
-              type="number"
-              id="new-pack-classes"
-              style="width:80px;"
-            >
-          </div>
-
-          <div class="f">
-            <label>
-              Precio
-            </label>
-
-            <input
-              type="number"
-              id="new-pack-price"
-              style="width:110px;"
-            >
-          </div>
-
-          <button
-            class="mini-btn"
-            onclick="addPack()"
-          >
-            Agregar pack
-          </button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3>
-          Promociones
-        </h3>
-
-        ${
-          DB.promos.length
-            ? DB.promos
-                .map(promo=>`
-                  <div
-                    class="promo-card"
-                    style="
-                      background:
-                        ${
-                          promo.active
-                            ? 'linear-gradient(135deg,var(--amber),var(--amber-dk))'
-                            : 'var(--cream-dim)'
-                        };
-                      color:
-                        ${
-                          promo.active
-                            ? 'var(--asphalt)'
-                            : 'var(--ink-soft)'
-                        };
-                    "
+                  <input
+                    id="service-name-${service.id}"
+                    value="${escapeHTML(service.name)}"
+                    style="width:100%;min-width:150px;"
                   >
-                    <div>
-                      <h4>
-                        ${
-                          escapeHTML(
-                            promo.title
-                          )
-                        }
-                      </h4>
 
-                      <p>
-                        ${
-                          escapeHTML(
-                            promo.desc
-                          )
-                        }
-                      </p>
-                    </div>
+                </td>
 
-                    <div class="btnrow">
-                      <button
-                        class="mini-btn"
-                        onclick="
-                          togglePromo(
-                            '${promo.id}'
-                          )
-                        "
-                      >
-                        ${
-                          promo.active
-                            ? 'Ocultar'
-                            : 'Activar'
-                        }
-                      </button>
 
-                      <button
-                        class="mini-btn no"
-                        onclick="
-                          removePromo(
-                            '${promo.id}'
-                          )
-                        "
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-                `)
-                .join('')
-            : `
-              <div class="empty">
-                No hay promociones cargadas.
-              </div>
+                <td>
+
+                  <input
+                    id="service-desc-${service.id}"
+                    value="${escapeHTML(service.desc)}"
+                    placeholder="Descripción opcional"
+                    style="width:100%;min-width:190px;"
+                  >
+
+                </td>
+
+
+                <td>
+
+                  <input
+  type="text"
+  inputmode="decimal"
+  id="service-price-${service.id}"
+  value="${
+    service.price === null
+      ? ''
+      : formatMoneyInputValue(
+          service.price
+        )
+  }"
+  placeholder="Opcional"
+  style="width:120px;"
+  oninput="formatMoneyField(this)"
+>
+
+                </td>
+
+
+                <td>
+
+                  <span
+                    class="pill ${
+                      service.active
+                        ? 'confirmed'
+                        : 'cancelled'
+                    }"
+                  >
+
+                    ${
+                      service.active
+                        ? 'Activa'
+                        : 'Oculta'
+                    }
+
+                  </span>
+
+                </td>
+
+
+                <td class="btnrow">
+
+                  <button
+                    class="mini-btn"
+                    onclick="saveService('${service.id}')"
+                  >
+                    Guardar
+                  </button>
+
+
+                  <button
+                    class="mini-btn"
+                    onclick="toggleService('${service.id}')"
+                  >
+
+                    ${
+                      service.active
+                        ? 'Ocultar'
+                        : 'Activar'
+                    }
+
+                  </button>
+
+
+                  <button
+                    class="mini-btn no"
+                    onclick="removeService('${service.id}')"
+                  >
+                    Eliminar
+                  </button>
+
+                </td>
+
+              </tr>
+
+            `).join('') ||
+
             `
-        }
+              <tr>
 
-        <h4 style="margin-top:20px;">
-          Nueva promo
-        </h4>
+                <td colspan="5">
 
-        <div class="field">
+                  <div class="empty">
+                    Todavía no hay
+                    clases cargadas.
+                  </div>
+
+                </td>
+
+              </tr>
+            `
+          }
+
+        </table>
+
+      </div>
+
+
+      <h4 style="margin-top:20px;">
+        Agregar clase
+      </h4>
+
+
+      <div class="inline-form">
+
+        <div class="f">
+
           <label>
-            Título
-          </label>
-
-          <input id="new-promo-title">
-        </div>
-
-        <div class="field">
-          <label>
-            Descripción
-          </label>
-
-          <input id="new-promo-desc">
-        </div>
-
-        <div class="field">
-          <label>
-            Etiqueta (opcional)
+            Nombre
           </label>
 
           <input
-            id="new-promo-badge"
-            placeholder="
-              Ej: válido hasta fin de mes
-            "
+            id="new-service-name"
+            placeholder="Ej: Clase de manejo"
           >
+
         </div>
 
-        <button
-          class="cta-btn small"
-          onclick="addPromo()"
+
+        <div
+          class="f"
+          style="
+            flex:1;
+            min-width:220px;
+          "
         >
-          Agregar promo
+
+          <label>
+            Descripción (opcional)
+          </label>
+
+          <input
+            id="new-service-desc"
+            placeholder="Ej: Práctica personalizada"
+          >
+
+        </div>
+
+
+        <div class="f">
+
+          <label>
+            Precio (opcional)
+          </label>
+
+          <input
+  type="text"
+  inputmode="decimal"
+  id="new-service-price"
+  placeholder="Dejar vacío"
+  style="width:140px;"
+  oninput="formatMoneyField(this)"
+>
+
+        </div>
+
+
+        <button
+          class="mini-btn"
+          onclick="addService()"
+        >
+          Agregar clase
         </button>
+
       </div>
-    `;
+
+    </div>
+
+
+
+    <div class="panel">
+
+      <h3>
+        Promociones
+      </h3>
+
+
+      ${
+        DB.promos.map(p=>`
+
+          <div
+            class="promo-card"
+            style="
+              background:${
+                p.active
+                  ? 'linear-gradient(135deg,var(--amber),var(--amber-dk))'
+                  : 'var(--cream-dim)'
+              };
+              color:${
+                p.active
+                  ? 'var(--asphalt)'
+                  : 'var(--ink-soft)'
+              };
+              margin-bottom:14px;
+            "
+          >
+
+            <div style="width:100%;">
+
+
+              <div class="inline-form">
+
+
+                <div class="f">
+
+                  <label>
+                    Título
+                  </label>
+
+                  <input
+                    id="promo-title-${p.id}"
+                    value="${escapeHTML(p.title)}"
+                  >
+
+                </div>
+
+
+                <div
+                  class="f"
+                  style="
+                    flex:1;
+                    min-width:220px;
+                  "
+                >
+
+                  <label>
+                    Descripción
+                  </label>
+
+                  <input
+                    id="promo-desc-${p.id}"
+                    value="${escapeHTML(p.desc)}"
+                  >
+
+                </div>
+
+
+                <div class="f">
+
+                  <label>
+                    Precio (opcional)
+                  </label>
+
+                  <input
+  type="text"
+  inputmode="decimal"
+  id="promo-price-${p.id}"
+  value="${
+    p.price === null
+      ? ''
+      : formatMoneyInputValue(
+          p.price
+        )
+  }"
+  placeholder="Opcional"
+  style="width:130px;"
+  oninput="formatMoneyField(this)"
+>
+
+                </div>
+
+
+                <div class="f">
+
+                  <label>
+                    Etiqueta
+                  </label>
+
+                  <input
+                    id="promo-badge-${p.id}"
+                    value="${escapeHTML(p.badge)}"
+                    placeholder="Opcional"
+                  >
+
+                </div>
+
+              </div>
+
+
+              <div
+                class="btnrow"
+                style="margin-top:10px;"
+              >
+
+                <button
+                  class="mini-btn"
+                  onclick="savePromo('${p.id}')"
+                >
+                  Guardar
+                </button>
+
+
+                <button
+                  class="mini-btn"
+                  onclick="togglePromo('${p.id}')"
+                >
+
+                  ${
+                    p.active
+                      ? 'Ocultar'
+                      : 'Activar'
+                  }
+
+                </button>
+
+
+                <button
+                  class="mini-btn no"
+                  onclick="removePromo('${p.id}')"
+                >
+                  Eliminar
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        `).join('') ||
+
+        `
+          <div class="empty">
+            No hay promociones cargadas.
+          </div>
+        `
+      }
+
+
+      <h4 style="margin-top:20px;">
+        Nueva promoción
+      </h4>
+
+
+      <div class="field">
+
+        <label>
+          Título
+        </label>
+
+        <input
+          id="new-promo-title"
+        >
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Descripción
+        </label>
+
+        <input
+          id="new-promo-desc"
+        >
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Precio promocional (opcional)
+        </label>
+
+        <input
+  type="text"
+  inputmode="decimal"
+  id="new-promo-price"
+  placeholder="Dejar vacío si no querés mostrar precio"
+  oninput="formatMoneyField(this)"
+>
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Etiqueta (opcional)
+        </label>
+
+        <input
+          id="new-promo-badge"
+          placeholder="
+            Ej: válido hasta fin de mes
+          "
+        >
+
+      </div>
+
+
+      <button
+        class="cta-btn small"
+        onclick="addPromo()"
+      >
+        Agregar promoción
+      </button>
+
+    </div>
+  `;
 }
 
-async function saveServiceSuelta(){
+async function saveService(id){
+
+  const name =
+    document
+      .getElementById(
+        'service-name-' + id
+      )
+      .value
+      .trim();
+
+
+  if(!name){
+
+    alert(
+      'La clase necesita un nombre.'
+    );
+
+    return;
+  }
+
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('services')
+
         .update({
-          price:
-            Number(
-              document
-                .getElementById(
-                  'price-suelta'
-                )
-                .value
-            ) || 0,
+
+          name,
 
           description:
             document
               .getElementById(
-                'desc-suelta'
-              )
-              .value
-              .trim()
-        })
-        .eq('id', 'suelta');
-
-    if(error){
-      throw error;
-    }
-
-    await loadAdminData();
-    renderAdminPricing();
-  }catch(error){
-    showDatabaseError(
-      error,
-      'No se pudo guardar la clase suelta.'
-    );
-  }
-}
-
-async function saveServiceCurso(){
-  try{
-    const { error } =
-      await supabaseClient
-        .from('services')
-        .update({
-          price:
-            Number(
-              document
-                .getElementById(
-                  'price-curso'
-                )
-                .value
-            ) || 0,
-
-          description:
-            document
-              .getElementById(
-                'desc-curso'
-              )
-              .value
-              .trim()
-        })
-        .eq('id', 'curso');
-
-    if(error){
-      throw error;
-    }
-
-    await loadAdminData();
-    renderAdminPricing();
-  }catch(error){
-    showDatabaseError(
-      error,
-      'No se pudo guardar el curso.'
-    );
-  }
-}
-
-async function savePack(id){
-  try{
-    const { error } =
-      await supabaseClient
-        .from('services')
-        .update({
-          name:
-            document
-              .getElementById(
-                'pack-name-' + id
+                'service-desc-' + id
               )
               .value
               .trim(),
 
-          classes:
-            Number(
-              document
-                .getElementById(
-                  'pack-classes-' + id
-                )
-                .value
-            ) || 0,
-
           price:
-            Number(
-              document
-                .getElementById(
-                  'pack-price-' + id
-                )
-                .value
-            ) || 0
+            optionalPriceValue(
+              'service-price-' + id
+            )
+
         })
-        .eq('id', id);
+
+        .eq(
+          'id',
+          id
+        );
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminPricing();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
-      'No se pudo guardar el pack.'
+      'No se pudo guardar la clase.'
     );
+
   }
 }
 
-async function removePack(id){
+async function toggleService(id){
+
+  const service =
+    DB.services.find(
+      item=>item.id === id
+    );
+
+
+  if(!service){
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('services')
+
+        .update({
+          active:!service.active
+        })
+
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminPricing();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo cambiar el estado de la clase.'
+    );
+
+  }
+}
+
+async function removeService(id){
+
+  const service =
+    DB.services.find(
+      item=>item.id === id
+    );
+
+
+  if(!service){
+    return;
+  }
+
+
   if(
     !confirm(
-      '¿Querés eliminar este pack?'
+      '¿Querés eliminar la clase "' +
+      service.name +
+      '"? Las reservas anteriores ' +
+      'conservarán el nombre de la clase.'
     )
   ){
     return;
   }
 
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('services')
+
         .delete()
-        .eq('id', id);
+
+        .eq(
+          'id',
+          id
+        );
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminPricing();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
-      'No se pudo eliminar el pack.'
+      'No se pudo eliminar la clase.'
     );
+
   }
 }
 
-async function addPack(){
+async function addService(){
+
   const name =
     document
       .getElementById(
-        'new-pack-name'
+        'new-service-name'
       )
       .value
       .trim();
 
+
   if(!name){
+
+    alert(
+      'Escribí el nombre de la clase.'
+    );
+
     return;
   }
 
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('services')
+
         .insert({
-          id: uid('pack'),
+
+          id:uid('service'),
+
           name,
-          service_type: 'pack',
+
+          service_type:
+            'class',
 
           classes:
-            Number(
-              document
-                .getElementById(
-                  'new-pack-classes'
-                )
-                .value
-            ) || 0,
+            null,
 
           price:
-            Number(
-              document
-                .getElementById(
-                  'new-pack-price'
-                )
-                .value
-            ) || 0,
+            optionalPriceValue(
+              'new-service-price'
+            ),
 
           description:
-            'Pack de clases de manejo.',
+            document
+              .getElementById(
+                'new-service-desc'
+              )
+              .value
+              .trim(),
 
           active:
             true
+
         });
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminPricing();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
-      'No se pudo agregar el pack.'
+      'No se pudo agregar la clase.'
     );
+
+  }
+}
+
+async function savePromo(id){
+
+  const title =
+    document
+      .getElementById(
+        'promo-title-' + id
+      )
+      .value
+      .trim();
+
+
+  if(!title){
+
+    alert(
+      'La promoción necesita un título.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+
+        .from('promos')
+
+        .update({
+
+          title,
+
+          description:
+            document
+              .getElementById(
+                'promo-desc-' + id
+              )
+              .value
+              .trim(),
+
+          badge:
+            document
+              .getElementById(
+                'promo-badge-' + id
+              )
+              .value
+              .trim(),
+
+          price:
+            optionalPriceValue(
+              'promo-price-' + id
+            )
+
+        })
+
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminPricing();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo guardar la promoción.'
+    );
+
   }
 }
 
 async function togglePromo(id){
+
   const promo =
     DB.promos.find(
       item=>item.id === id
     );
 
+
   if(!promo){
     return;
   }
 
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('promos')
+
         .update({
-          active:
-            !promo.active
+          active:!promo.active
         })
-        .eq('id', id);
+
+        .eq(
+          'id',
+          id
+        );
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminPricing();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
       'No se pudo actualizar la promoción.'
     );
+
   }
 }
 
 async function removePromo(id){
+
   if(
     !confirm(
       '¿Querés eliminar esta promoción?'
@@ -5846,24 +10627,39 @@ async function removePromo(id){
     return;
   }
 
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('promos')
+
         .delete()
-        .eq('id', id);
+
+        .eq(
+          'id',
+          id
+        );
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminPricing();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
       'No se pudo eliminar la promoción.'
     );
+
   }
 }
 
@@ -5876,15 +10672,26 @@ async function addPromo(){
       .value
       .trim();
 
+
   if(!title){
+
+    alert(
+      'Escribí el título de la promoción.'
+    );
+
     return;
   }
 
+
   try{
+
     const { error } =
       await supabaseClient
+
         .from('promos')
+
         .insert({
+
           title,
 
           description:
@@ -5903,28 +10710,40 @@ async function addPromo(){
               .value
               .trim(),
 
+          price:
+            optionalPriceValue(
+              'new-promo-price'
+            ),
+
           active:
             true
+
         });
+
 
     if(error){
       throw error;
     }
 
+
     await loadAdminData();
+
     renderAdminPricing();
+
+
   }catch(error){
+
     showDatabaseError(
       error,
       'No se pudo agregar la promoción.'
     );
+
   }
 }
 
 /* ==================================================================
    ADMINISTRADOR: MENSAJES
    ================================================================== */
-
 function renderAdminMessages(){
   document
     .getElementById(
@@ -6070,7 +10889,6 @@ async function markRead(id){
 /* ==================================================================
    ADMINISTRADOR: AJUSTES
    ================================================================== */
-
 function renderAdminSettings(){
   const settings = DB.settings;
 
@@ -6297,7 +11115,6 @@ async function saveSettings(){
 /* ==================================================================
    INICIO DEL SISTEMA
    ================================================================== */
-
 async function init(){
   try{
     await loadDB();
