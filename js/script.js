@@ -1321,19 +1321,15 @@ function renderHero(){
             </div>
 
             <h1>
-              Aprendé a manejar con
-              <em>paciencia y seguridad</em>,
-              practicando con tu propio auto.
+                Aprendé a conducir.
+                <em>Ganá confianza.</em>
+                Disfrutá tu libertad.
             </h1>
 
             <p class="sub">
-              Clases personalizadas a tu ritmo,
-              para perder el miedo al volante
-              o sacar tu primera licencia.
-              Las clases se dictan siempre en
-              el auto de la alumna: aprendés
-              desde el primer día con el
-              vehículo que después vas a usar.
+              En cada clase te acompaño a desarrollar
+              confianza, seguridad, calma y control al volante.
+              Con paciencia, motivación y una enseñanza personalizada.
             </p>
 
             <div class="ctas">
