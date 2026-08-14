@@ -4895,7 +4895,7 @@ const pendingToCollect =
                                     ) +
                                     ' a las ' +
                                     booking.time +
-                                    '. ¡Te esperamos!'
+                                    '. ¡Nos vemos mañana!'
                                   )
                                 )
                               }"
