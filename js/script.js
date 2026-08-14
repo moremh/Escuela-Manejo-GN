@@ -4895,7 +4895,7 @@ const pendingToCollect =
                                     ) +
                                     ' a las ' +
                                     booking.time +
-                                    '. ¡Nos vemos mañana!'
+                                    '. ¡Te esperamos!'
                                   )
                                 )
                               }"
@@ -5299,6 +5299,452 @@ async function removeWeeklyRange(id){
 
 
 /* ================================================================
+   RESUMEN MENSUAL DE CLASES CONFIRMADAS
+   ================================================================ */
+
+function adminViewedMonthInfo(){
+
+  const {
+    year,
+    month
+  } = monthGridDates(
+    adminMonthOffset
+  );
+
+  return {
+    year,
+    month,
+    monthName:
+      MONTHS[month]
+  };
+}
+
+
+function formatAgendaShortDate(
+  iso
+){
+
+  if(!iso){
+    return '—';
+  }
+
+  const [
+    year,
+    month,
+    day
+  ] = iso.split('-');
+
+  return (
+    day +
+    '/' +
+    month +
+    '/' +
+    year
+  );
+}
+
+
+function monthlyConfirmedBookings(){
+
+  const {
+    year,
+    month
+  } = adminViewedMonthInfo();
+
+  const monthPrefix =
+    year +
+    '-' +
+    String(
+      month + 1
+    ).padStart(
+      2,
+      '0'
+    ) +
+    '-';
+
+  return (
+    DB.bookings || []
+  )
+    .filter(
+      booking=>
+        booking.status ===
+          'confirmed' &&
+        String(
+          booking.date || ''
+        ).startsWith(
+          monthPrefix
+        )
+    )
+    .sort(
+      (a,b)=>{
+
+        const dateCompare =
+          String(
+            a.date || ''
+          ).localeCompare(
+            String(
+              b.date || ''
+            )
+          );
+
+        if(dateCompare !== 0){
+          return dateCompare;
+        }
+
+        return (
+          bookingEffectiveTime(
+            a
+          ) || '99:99'
+        ).localeCompare(
+          bookingEffectiveTime(
+            b
+          ) || '99:99'
+        );
+      }
+    );
+}
+
+
+function monthlyAttendanceLabel(
+  booking
+){
+
+  if(
+    booking.attendanceStatus ===
+      'completed'
+  ){
+    return 'Realizada';
+  }
+
+  if(
+    booking.attendanceStatus ===
+      'not_completed'
+  ){
+    return 'No realizada';
+  }
+
+  return 'Pendiente';
+}
+
+
+function monthlyAttendanceClass(
+  booking
+){
+
+  if(
+    booking.attendanceStatus ===
+      'completed'
+  ){
+    return 'confirmed';
+  }
+
+  if(
+    booking.attendanceStatus ===
+      'not_completed'
+  ){
+    return 'cancelled';
+  }
+
+  return 'pending';
+}
+
+
+function renderMonthlyConfirmedClasses(){
+
+  const container =
+    document.getElementById(
+      'admin-monthly-classes'
+    );
+
+  if(!container){
+    return;
+  }
+
+
+  const {
+    monthName,
+    year
+  } = adminViewedMonthInfo();
+
+
+  const bookings =
+    monthlyConfirmedBookings();
+
+
+  const completedCount =
+    bookings.filter(
+      booking=>
+        booking.attendanceStatus ===
+          'completed'
+    ).length;
+
+
+  const notCompletedCount =
+    bookings.filter(
+      booking=>
+        booking.attendanceStatus ===
+          'not_completed'
+    ).length;
+
+
+  const pendingCount =
+    bookings.length -
+    completedCount -
+    notCompletedCount;
+
+
+  container.innerHTML = `
+
+    <div
+      style="
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        gap:16px;
+        flex-wrap:wrap;
+        margin-bottom:16px;
+      "
+    >
+
+      <div>
+
+        <h3
+          style="
+            margin-bottom:6px;
+          "
+        >
+          Clases confirmadas de
+          ${monthName} ${year}
+        </h3>
+
+        <p
+          class="note"
+          style="margin:0;"
+        >
+          ${
+            bookings.length
+          }
+          clase${
+            bookings.length === 1
+              ? ''
+              : 's'
+          } confirmada${
+            bookings.length === 1
+              ? ''
+              : 's'
+          }
+
+          · ${completedCount}
+          realizada${
+            completedCount === 1
+              ? ''
+              : 's'
+          }
+
+          · ${pendingCount}
+          pendiente${
+            pendingCount === 1
+              ? ''
+              : 's'
+          }
+
+          ${
+            notCompletedCount
+              ? `
+                  · ${notCompletedCount}
+                  no realizada${
+                    notCompletedCount === 1
+                      ? ''
+                      : 's'
+                  }
+                `
+              : ''
+          }
+        </p>
+
+      </div>
+
+    </div>
+
+
+    ${
+      bookings.length
+
+        ? `
+
+            <div class="table-scroll">
+
+              <table class="admin-table">
+
+                <tr>
+                  <th>Fecha</th>
+                  <th>Hora</th>
+                  <th>Alumna</th>
+                  <th>Clase</th>
+                  <th>Asistencia</th>
+                  <th></th>
+                </tr>
+
+
+                ${bookings.map(
+                  booking=>{
+
+                    const phone =
+                      bookingCurrentPhone(
+                        booking
+                      );
+
+                    const time =
+                      bookingEffectiveTime(
+                        booking
+                      ) || '—';
+
+                    return `
+
+                      <tr>
+
+                        <td>
+                          ${
+                            formatAgendaShortDate(
+                              booking.date
+                            )
+                          }
+                        </td>
+
+
+                        <td class="mono">
+                          ${time}
+                        </td>
+
+
+                        <td>
+
+                          <strong>
+                            ${
+                              escapeHTML(
+                                booking.name
+                              )
+                            }
+                          </strong>
+
+                          ${
+                            phone
+                              ? `
+                                  <br>
+                                  <span class="note">
+                                    ${
+                                      escapeHTML(
+                                        phone
+                                      )
+                                    }
+                                  </span>
+                                `
+                              : ''
+                          }
+
+                        </td>
+
+
+                        <td>
+                          ${
+                            escapeHTML(
+                              labelFor(
+                                booking.service,
+                                booking.serviceName
+                              )
+                            )
+                          }
+                        </td>
+
+
+                        <td>
+
+                          <span
+                            class="
+                              pill
+                              ${
+                                monthlyAttendanceClass(
+                                  booking
+                                )
+                              }
+                            "
+                          >
+                            ${
+                              monthlyAttendanceLabel(
+                                booking
+                              )
+                            }
+                          </span>
+
+                        </td>
+
+
+                        <td class="btnrow">
+
+                          ${
+                            phone
+
+                              ? `
+                                  <a
+                                    class="mini-btn wa"
+                                    target="_blank"
+                                    rel="
+                                      noopener noreferrer
+                                    "
+                                    href="${
+                                      waLink(
+                                        phone,
+                                        (
+                                          'Hola ' +
+                                          booking.name +
+                                          '! Te escribimos por tu clase de manejo del ' +
+                                          fmtDateHuman(
+                                            booking.date
+                                          ) +
+                                          ' a las ' +
+                                          time +
+                                          '.'
+                                        )
+                                      )
+                                    }"
+                                  >
+                                    WhatsApp
+                                  </a>
+                                `
+
+                              : ''
+                          }
+
+                        </td>
+
+                      </tr>
+
+                    `;
+                  }
+                ).join('')}
+
+              </table>
+
+            </div>
+
+          `
+
+        : `
+
+            <div class="empty">
+              No hay clases confirmadas
+              para ${monthName} ${year}.
+            </div>
+
+          `
+    }
+
+  `;
+
+}
+
+
+/* ================================================================
    AGENDA PRINCIPAL
    ================================================================ */
 
@@ -5381,6 +5827,13 @@ function renderAdminAgenda(){
         </div>
 
       </div>
+
+
+      <div
+        class="panel"
+        id="admin-monthly-classes"
+      ></div>
+
     `;
 
 
@@ -5423,6 +5876,8 @@ function drawAdminCalendar(){
 
 
   renderAdminDayPanel();
+
+  renderMonthlyConfirmedClasses();
 }
 
 /* ================================================================
