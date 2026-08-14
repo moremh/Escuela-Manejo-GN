@@ -1351,17 +1351,17 @@ function renderHero(){
             <div class="badge-row">
               <div class="badge">
                 ${icon('heart')}
-                Paciencia, a tu ritmo
+                Manejo Defensivo
               </div>
 
               <div class="badge">
                 ${icon('shield')}
-                Clases seguras
+                Seguridad
               </div>
 
               <div class="badge">
                 ${icon('wheel')}
-                Se enseña con tu propio auto
+                Confianza
               </div>
             </div>
           </div>
