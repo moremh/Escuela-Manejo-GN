@@ -1188,6 +1188,45 @@ const PUB_SECTIONS = [
   }
 ];
 
+const NAV_STATE_KEYS = {
+  view: 'escuela_manejo_current_view',
+  publicSection: 'escuela_manejo_public_section',
+  adminTab: 'escuela_manejo_admin_tab'
+};
+
+function saveCurrentView(view){
+  sessionStorage.setItem(
+    NAV_STATE_KEYS.view,
+    view
+  );
+}
+
+function getSavedPublicSection(){
+  const saved =
+    sessionStorage.getItem(
+      NAV_STATE_KEYS.publicSection
+    );
+
+  return PUB_SECTIONS.some(
+    section=>section.id === saved
+  )
+    ? saved
+    : 'inicio';
+}
+
+function getSavedAdminTab(){
+  const saved =
+    sessionStorage.getItem(
+      NAV_STATE_KEYS.adminTab
+    );
+
+  return ADMIN_TABS.some(
+    tab=>tab.id === saved
+  )
+    ? saved
+    : 'dashboard';
+}
+
 let currentPub = 'inicio';
 
 function toggleMobileNav(){
@@ -1199,6 +1238,13 @@ function toggleMobileNav(){
 
 async function goPublic(id){
   currentPub = id;
+
+  sessionStorage.setItem(
+    NAV_STATE_KEYS.publicSection,
+    id
+  );
+
+  saveCurrentView('public');
 
   document
     .querySelectorAll(
@@ -4112,6 +4158,8 @@ async function currentSessionIsAdmin(){
 }
 
 async function openAdmin(){
+  saveCurrentView('admin');
+
   const publicView =
     document.getElementById(
       'public-view'
@@ -4153,6 +4201,8 @@ async function openAdmin(){
 }
 
 function closeAdmin(){
+  saveCurrentView('public');
+
   document
     .getElementById(
       'admin-view'
@@ -4393,6 +4443,12 @@ async function logoutAdmin(){
 
   adminAuthed = false;
 
+  saveCurrentView('public');
+
+  sessionStorage.removeItem(
+    NAV_STATE_KEYS.adminTab
+  );
+
   document
     .getElementById(
       'admin-view'
@@ -4427,7 +4483,9 @@ function showAdminDashboard(){
 
   renderAdminNav();
 
-  goAdmin('dashboard');
+  goAdmin(
+    getSavedAdminTab()
+  );
 }
 
 /* ==================================================================
@@ -4503,6 +4561,14 @@ function renderAdminNav(){
 
 async function goAdmin(id){
   currentAdminTab = id;
+
+  sessionStorage.setItem(
+    NAV_STATE_KEYS.adminTab,
+    id
+  );
+
+  saveCurrentView('admin');
+
   renderAdminNav();
 
   const main =
@@ -4817,7 +4883,9 @@ const pendingToCollect =
                               rel="noopener noreferrer"
                               href="${
                                 waLink(
-                                  booking.phone,
+                                  bookingCurrentPhone(
+                                    booking
+                                  ),
                                   (
                                     'Hola ' +
                                     booking.name +
@@ -6194,6 +6262,38 @@ function bookingStatusClass(status){
   return 'pending';
 }
 
+function bookingCurrentPhone(
+  booking
+){
+
+  if(
+    booking &&
+    booking.studentId
+  ){
+
+    const student =
+      DB.students.find(
+        item=>
+          item.id ===
+            booking.studentId
+      );
+
+
+    if(
+      student &&
+      student.phone
+    ){
+      return student.phone;
+    }
+
+  }
+
+
+  return booking?.phone || '';
+
+}
+
+
 function bookingWhatsAppText(
   booking
 ){
@@ -6842,14 +6942,18 @@ const bookingsDay =
                           }
 
                           ${
-                            booking.phone
+                            bookingCurrentPhone(
+                              booking
+                            )
                               ? `
                                   <br>
 
                                   <span class="note">
                                     ${
                                       escapeHTML(
-                                        booking.phone
+                                        bookingCurrentPhone(
+                                          booking
+                                        )
                                       )
                                     }
                                   </span>
@@ -7091,7 +7195,9 @@ const bookingsDay =
 
 
                           ${
-                            booking.phone &&
+                            bookingCurrentPhone(
+                              booking
+                            ) &&
 bookingOccupiesSlot(
   booking
 )
@@ -7106,7 +7212,9 @@ bookingOccupiesSlot(
                                     "
                                     href="${
                                       waLink(
-  booking.phone,
+  bookingCurrentPhone(
+    booking
+  ),
   bookingWhatsAppText(
     booking
   )
@@ -8381,34 +8489,64 @@ async function saveStudentEdits(
 
 
     /*
-      Algunas tablas guardan también
-      el nombre de la alumna para
-      mostrarlo rápidamente. Si el
-      nombre se corrigió, lo mantenemos
-      sincronizado en esos registros.
+      Las reservas guardan una copia del
+      nombre y del teléfono de la alumna.
+      Si alguno cambia en la ficha,
+      mantenemos también las reservas
+      anteriores sincronizadas.
+    */
+    const bookingDataChanged =
+      name !== student.name ||
+      phone !== student.phone;
+
+
+    if(bookingDataChanged){
+
+      const { error: bookingsError } =
+        await supabaseClient
+
+          .from('bookings')
+
+          .update({
+
+            student_name:
+              name,
+
+            phone:
+              phone
+
+          })
+
+          .eq(
+            'student_id',
+            studentId
+          );
+
+
+      if(bookingsError){
+        throw bookingsError;
+      }
+
+    }
+
+
+    /*
+      Pagos y deudas guardan una copia
+      del nombre, por eso también la
+      actualizamos cuando se corrige.
     */
     if(name !== student.name){
 
       const [
-        bookingsResult,
         paymentsResult,
         duesResult
       ] = await Promise.all([
 
         supabaseClient
-          .from('bookings')
-          .update({
-            student_name:name
-          })
-          .eq(
-            'student_id',
-            studentId
-          ),
-
-        supabaseClient
           .from('payments')
           .update({
-            student_name:name
+            student_name:
+              name
           })
           .eq(
             'student_id',
@@ -8418,7 +8556,8 @@ async function saveStudentEdits(
         supabaseClient
           .from('payment_dues')
           .update({
-            student_name:name
+            student_name:
+              name
           })
           .eq(
             'student_id',
@@ -8429,9 +8568,9 @@ async function saveStudentEdits(
 
 
       const relatedError =
-        bookingsResult.error ||
         paymentsResult.error ||
         duesResult.error;
+
 
       if(relatedError){
         throw relatedError;
@@ -12356,7 +12495,53 @@ async function init(){
   buildPublicSections();
   renderContact();
 
-  await goPublic('inicio');
+  const savedView =
+    sessionStorage.getItem(
+      NAV_STATE_KEYS.view
+    ) || 'public';
+
+  if(savedView === 'admin'){
+
+    document
+      .getElementById(
+        'public-view'
+      )
+      .classList
+      .add('hidden');
+
+    document
+      .getElementById(
+        'admin-view'
+      )
+      .classList
+      .remove('hidden');
+
+    if(adminAuthed){
+      showAdminDashboard();
+    }else{
+      showAdminLogin();
+    }
+
+    return;
+  }
+
+  document
+    .getElementById(
+      'admin-view'
+    )
+    .classList
+    .add('hidden');
+
+  document
+    .getElementById(
+      'public-view'
+    )
+    .classList
+    .remove('hidden');
+
+  await goPublic(
+    getSavedPublicSection()
+  );
 }
 
 supabaseClient
