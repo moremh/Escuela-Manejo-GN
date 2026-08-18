@@ -1968,11 +1968,146 @@ function renderCalendarPublic(){
   renderSlotPanel();
 }
 
+
+function ensureAdminCalendarStyles(){
+
+  if(
+    document.getElementById(
+      'admin-calendar-mobile-styles'
+    )
+  ){
+    return;
+  }
+
+
+  const style =
+    document.createElement(
+      'style'
+    );
+
+  style.id =
+    'admin-calendar-mobile-styles';
+
+  style.textContent = `
+    #cal-admin .cal-day.past{
+      cursor:pointer;
+    }
+
+    #cal-admin
+    .cal-day.past:hover{
+      outline:
+        2px solid
+        rgba(58,76,97,.20);
+    }
+
+    @media(max-width:768px){
+
+      #cal-admin .cal-day{
+        min-height:44px;
+        aspect-ratio:1;
+        padding:5px 4px;
+        align-items:flex-start;
+        justify-content:flex-start;
+        box-sizing:border-box;
+      }
+
+      #cal-admin
+      .cal-date-number{
+        position:relative;
+        z-index:2;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        min-width:17px;
+        min-height:17px;
+        font-size:11px;
+        line-height:1;
+      }
+
+      #cal-admin
+      .admin-cal-markers{
+        position:absolute;
+        left:3px;
+        right:3px;
+        bottom:3px;
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
+        gap:2px;
+        margin:0;
+        pointer-events:none;
+      }
+
+      #cal-admin
+      .admin-cal-marker{
+        width:13px !important;
+        height:13px !important;
+        min-width:13px !important;
+        min-height:13px !important;
+        padding:0 !important;
+        margin:0 !important;
+        border-radius:50% !important;
+        display:inline-flex !important;
+        align-items:center;
+        justify-content:center;
+        font-size:8px !important;
+        line-height:1 !important;
+        font-weight:700;
+      }
+
+      #cal-admin
+      .admin-cal-marker
+      .marker-text{
+        transform:
+          translateY(.2px);
+      }
+
+      #cal-admin
+      .pending-booking{
+        background:
+          var(--amber) !important;
+        color:
+          var(--asphalt) !important;
+      }
+
+      #cal-admin
+      .confirmed-booking{
+        background:
+          var(--sage) !important;
+        color:white !important;
+      }
+
+      #cal-admin
+      .cal-day.past{
+        opacity:.82;
+      }
+
+      #cal-admin
+      .cal-day.past
+      .admin-cal-marker{
+        opacity:1;
+      }
+
+    }
+  `;
+
+
+  document.head
+    .appendChild(style);
+
+}
+
+
 function buildCalendar(
   containerId,
   offset,
   options
 ){
+
+  if(options.mode === 'admin'){
+    ensureAdminCalendarStyles();
+  }
+
   const {
     cells,
     year,
@@ -2099,7 +2234,7 @@ const confirmedBookings =
 
             const clickable =
               options.mode === 'admin'
-                ? !isPast
+                ? true
                 : (
                     !isPast &&
                     !blocked &&
@@ -2120,7 +2255,9 @@ const confirmedBookings =
                     : 'disabled'
                 }
               >
-                ${date.getDate()}
+                <span class="cal-date-number">
+                  ${date.getDate()}
+                </span>
 
                 ${
   options.mode === 'admin' &&
@@ -2151,7 +2288,9 @@ const confirmedBookings =
                         : 's'
                     }"
                   >
-                    ${pendingBookings}
+                    <span class="marker-text">
+                      ${pendingBookings}
+                    </span>
                   </span>
                 `
               : ''
@@ -2178,7 +2317,9 @@ const confirmedBookings =
                         : 's'
                     }"
                   >
-                    ${confirmedBookings}
+                    <span class="marker-text">
+                      ${confirmedBookings}
+                    </span>
                   </span>
                 `
               : ''
@@ -4201,6 +4342,7 @@ async function openAdmin(){
 }
 
 function closeAdmin(){
+  closeAdminSidebar();
   saveCurrentView('public');
 
   document
@@ -4423,6 +4565,8 @@ async function handleLogin(event){
 }
 
 async function logoutAdmin(){
+  closeAdminSidebar();
+
   try{
     const {
       error
@@ -4481,6 +4625,7 @@ function showAdminDashboard(){
     .classList
     .remove('hidden');
 
+  ensureAdminSidebarUI();
   renderAdminNav();
 
   goAdmin(
@@ -4534,15 +4679,600 @@ const ADMIN_TABS = [
 let currentAdminTab =
   'dashboard';
 
-function renderAdminNav(){
-  document
-    .getElementById(
-      'admin-nav'
+function ensureAdminSidebarUI(){
+
+  if(
+    !document.getElementById(
+      'admin-sidebar-styles'
     )
-    .innerHTML =
-      ADMIN_TABS
+  ){
+
+    const style =
+      document.createElement(
+        'style'
+      );
+
+    style.id =
+      'admin-sidebar-styles';
+
+    style.textContent = `
+      .admin-shell{
+        display:block !important;
+        grid-template-columns:none !important;
+        width:100% !important;
+        max-width:100% !important;
+        min-height:
+          calc(100vh - 65px);
+      }
+
+      .admin-main{
+        width:100% !important;
+        max-width:1180px !important;
+        margin:0 auto !important;
+        box-sizing:border-box;
+      }
+
+      .admin-top{
+        position:sticky;
+        top:0;
+        z-index:1200;
+        box-shadow:
+          0 4px 18px
+          rgba(20,29,39,.12);
+      }
+
+      .admin-top .wrap{
+        display:flex !important;
+        flex-direction:row !important;
+        align-items:center !important;
+        justify-content:space-between !important;
+        gap:12px !important;
+      }
+
+      .admin-top .wrap >
+      div:last-child{
+        display:none !important;
+      }
+
+      .admin-menu-toggle{
+        flex:0 0 auto;
+        border:1px solid
+          rgba(255,255,255,.18);
+        background:
+          rgba(255,255,255,.08);
+        color:var(--cream);
+        min-height:42px;
+        padding:9px 14px;
+        border-radius:9px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:8px;
+        font-family:
+          'Space Grotesk',
+          sans-serif;
+        font-size:14px;
+        font-weight:600;
+        cursor:pointer;
+      }
+
+      .admin-menu-toggle:hover{
+        background:
+          rgba(255,255,255,.14);
+      }
+
+      .admin-menu-toggle-icon{
+        width:18px;
+        height:14px;
+        display:flex;
+        flex-direction:column;
+        justify-content:space-between;
+      }
+
+      .admin-menu-toggle-icon span{
+        display:block;
+        width:100%;
+        height:2px;
+        border-radius:999px;
+        background:currentColor;
+      }
+
+      .admin-nav{
+        position:fixed !important;
+        top:0 !important;
+        left:0 !important;
+        bottom:0 !important;
+        width:min(86vw, 310px) !important;
+        max-width:310px !important;
+        min-width:0 !important;
+        height:100dvh !important;
+        padding:0 !important;
+        margin:0 !important;
+        background:
+          var(--asphalt-2) !important;
+        z-index:3100 !important;
+        transform:
+          translateX(-105%);
+        transition:
+          transform .24s ease;
+        box-shadow:
+          18px 0 45px
+          rgba(9,15,22,.22);
+        overflow-y:auto !important;
+        overscroll-behavior:contain;
+        display:flex !important;
+        flex-direction:column !important;
+      }
+
+      .admin-nav.open{
+        transform:
+          translateX(0);
+      }
+
+      .admin-menu-overlay{
+        position:fixed;
+        inset:0;
+        z-index:3090;
+        background:
+          rgba(11,18,26,.58);
+        backdrop-filter:
+          blur(2px);
+        -webkit-backdrop-filter:
+          blur(2px);
+        opacity:0;
+        visibility:hidden;
+        pointer-events:none;
+        transition:
+          opacity .22s ease,
+          visibility .22s ease;
+      }
+
+      .admin-menu-overlay.open{
+        opacity:1;
+        visibility:visible;
+        pointer-events:auto;
+      }
+
+      body.admin-sidebar-open{
+        overflow:hidden !important;
+      }
+
+      .admin-sidebar-head{
+        position:sticky;
+        top:0;
+        z-index:2;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        padding:20px 18px 16px;
+        background:
+          var(--asphalt-2);
+        border-bottom:
+          1px solid
+          rgba(255,255,255,.10);
+      }
+
+      .admin-sidebar-title{
+        color:var(--cream);
+        font-family:
+          'Space Grotesk',
+          sans-serif;
+        font-size:18px;
+        font-weight:700;
+      }
+
+      .admin-sidebar-subtitle{
+        margin-top:3px;
+        color:
+          rgba(255,255,255,.62);
+        font-size:12px;
+      }
+
+      .admin-sidebar-close{
+        width:38px !important;
+        height:38px !important;
+        min-width:38px !important;
+        margin:0 !important;
+        padding:0 !important;
+        border-radius:9px !important;
+        display:flex !important;
+        align-items:center;
+        justify-content:center;
+        background:
+          rgba(255,255,255,.08) !important;
+        color:var(--cream) !important;
+        font-size:23px !important;
+        line-height:1 !important;
+        text-align:center !important;
+      }
+
+      .admin-sidebar-items{
+        padding:14px 12px;
+        flex:1 1 auto;
+      }
+
+      .admin-nav
+      .admin-sidebar-items
+      button{
+        display:flex !important;
+        align-items:center;
+        width:100% !important;
+        min-height:44px;
+        margin:0 0 5px !important;
+        padding:11px 14px !important;
+        border-radius:9px !important;
+        text-align:left !important;
+        white-space:normal !important;
+        color:var(--cream-dim);
+        transition:
+          background .15s ease,
+          color .15s ease,
+          transform .15s ease;
+      }
+
+      .admin-nav
+      .admin-sidebar-items
+      button:hover{
+        background:
+          rgba(255,255,255,.07);
+      }
+
+      .admin-nav
+      .admin-sidebar-items
+      button.active{
+        background:
+          var(--amber) !important;
+        color:
+          var(--asphalt) !important;
+        font-weight:700;
+      }
+
+      .admin-sidebar-footer{
+        padding:14px 12px 18px;
+        border-top:
+          1px solid
+          rgba(255,255,255,.10);
+      }
+
+      .admin-nav
+      .admin-sidebar-footer
+      button{
+        width:100% !important;
+        min-height:42px;
+        margin:0 0 7px !important;
+        padding:10px 14px !important;
+        border-radius:9px !important;
+        text-align:left !important;
+      }
+
+      .admin-sidebar-public{
+        background:
+          rgba(255,255,255,.08) !important;
+        color:var(--cream) !important;
+      }
+
+      .admin-sidebar-logout{
+        background:
+          rgba(190,78,62,.16) !important;
+        color:#ffd9d2 !important;
+        border:
+          1px solid
+          rgba(255,185,174,.12) !important;
+      }
+
+      @media(max-width:768px){
+
+        .admin-top .wrap{
+          padding:
+            12px 14px !important;
+        }
+
+        .admin-top .brand{
+          width:auto !important;
+          max-width:
+            calc(100% - 100px);
+          font-size:14px !important;
+          line-height:1.2;
+        }
+
+        .admin-menu-toggle{
+          min-height:40px;
+          padding:8px 12px;
+          font-size:13px;
+        }
+
+        .admin-main{
+          padding:
+            22px 14px 90px
+            !important;
+        }
+
+      }
+    `;
+
+    document.head
+      .appendChild(style);
+
+  }
+
+
+  if(
+    !document.getElementById(
+      'admin-menu-overlay'
+    )
+  ){
+
+    const overlay =
+      document.createElement(
+        'div'
+      );
+
+    overlay.id =
+      'admin-menu-overlay';
+
+    overlay.className =
+      'admin-menu-overlay';
+
+    overlay.onclick =
+      closeAdminSidebar;
+
+    document.body
+      .appendChild(overlay);
+
+  }
+
+
+  const topWrap =
+    document.querySelector(
+      '#admin-dashboard-screen ' +
+      '.admin-top .wrap'
+    );
+
+
+  if(
+    topWrap &&
+    !document.getElementById(
+      'admin-menu-toggle'
+    )
+  ){
+
+    const button =
+      document.createElement(
+        'button'
+      );
+
+    button.id =
+      'admin-menu-toggle';
+
+    button.type =
+      'button';
+
+    button.className =
+      'admin-menu-toggle';
+
+    button.setAttribute(
+      'aria-label',
+      'Abrir menú del panel'
+    );
+
+    button.setAttribute(
+      'aria-expanded',
+      'false'
+    );
+
+    button.innerHTML = `
+      <span
+        class="
+          admin-menu-toggle-icon
+        "
+        aria-hidden="true"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </span>
+      Menú
+    `;
+
+    button.onclick =
+      toggleAdminSidebar;
+
+    topWrap.appendChild(
+      button
+    );
+
+  }
+
+
+  if(
+    !window
+      .__adminSidebarEscapeBound
+  ){
+
+    document.addEventListener(
+      'keydown',
+      event=>{
+
+        if(
+          event.key === 'Escape'
+        ){
+          closeAdminSidebar();
+        }
+
+      }
+    );
+
+    window
+      .__adminSidebarEscapeBound =
+      true;
+
+  }
+
+}
+
+
+function openAdminSidebar(){
+
+  ensureAdminSidebarUI();
+
+  const nav =
+    document.getElementById(
+      'admin-nav'
+    );
+
+  const overlay =
+    document.getElementById(
+      'admin-menu-overlay'
+    );
+
+  const toggle =
+    document.getElementById(
+      'admin-menu-toggle'
+    );
+
+
+  if(nav){
+    nav.classList.add(
+      'open'
+    );
+  }
+
+  if(overlay){
+    overlay.classList.add(
+      'open'
+    );
+  }
+
+  if(toggle){
+    toggle.setAttribute(
+      'aria-expanded',
+      'true'
+    );
+  }
+
+  document.body
+    .classList
+    .add(
+      'admin-sidebar-open'
+    );
+
+}
+
+
+function closeAdminSidebar(){
+
+  const nav =
+    document.getElementById(
+      'admin-nav'
+    );
+
+  const overlay =
+    document.getElementById(
+      'admin-menu-overlay'
+    );
+
+  const toggle =
+    document.getElementById(
+      'admin-menu-toggle'
+    );
+
+
+  if(nav){
+    nav.classList.remove(
+      'open'
+    );
+  }
+
+  if(overlay){
+    overlay.classList.remove(
+      'open'
+    );
+  }
+
+  if(toggle){
+    toggle.setAttribute(
+      'aria-expanded',
+      'false'
+    );
+  }
+
+  document.body
+    .classList
+    .remove(
+      'admin-sidebar-open'
+    );
+
+}
+
+
+function toggleAdminSidebar(){
+
+  const nav =
+    document.getElementById(
+      'admin-nav'
+    );
+
+  if(
+    nav &&
+    nav.classList.contains(
+      'open'
+    )
+  ){
+    closeAdminSidebar();
+  }else{
+    openAdminSidebar();
+  }
+
+}
+
+
+function renderAdminNav(){
+
+  ensureAdminSidebarUI();
+
+  const nav =
+    document.getElementById(
+      'admin-nav'
+    );
+
+  if(!nav){
+    return;
+  }
+
+  nav.innerHTML = `
+
+    <div class="admin-sidebar-head">
+
+      <div>
+        <div class="admin-sidebar-title">
+          Menú administrador
+        </div>
+
+        <div class="admin-sidebar-subtitle">
+          Elegí una sección
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="admin-sidebar-close"
+        onclick="closeAdminSidebar()"
+        aria-label="Cerrar menú"
+      >
+        ×
+      </button>
+
+    </div>
+
+
+    <div class="admin-sidebar-items">
+
+      ${ADMIN_TABS
         .map(tab=>`
+
           <button
+            type="button"
             class="${
               tab.id ===
               currentAdminTab
@@ -4555,8 +5285,41 @@ function renderAdminNav(){
           >
             ${tab.label}
           </button>
+
         `)
-        .join('');
+        .join('')}
+
+    </div>
+
+
+    <div class="admin-sidebar-footer">
+
+      <button
+        type="button"
+        class="admin-sidebar-public"
+        onclick="
+          closeAdminSidebar();
+          closeAdmin();
+        "
+      >
+        Ver sitio público
+      </button>
+
+      <button
+        type="button"
+        class="admin-sidebar-logout"
+        onclick="
+          closeAdminSidebar();
+          logoutAdmin();
+        "
+      >
+        Cerrar sesión
+      </button>
+
+    </div>
+
+  `;
+
 }
 
 async function goAdmin(id){
@@ -4570,6 +5333,7 @@ async function goAdmin(id){
   saveCurrentView('admin');
 
   renderAdminNav();
+  closeAdminSidebar();
 
   const main =
     document.getElementById(
@@ -5807,6 +6571,9 @@ function renderAdminAgenda(){
           Elegí un día para ver solicitudes,
           clases, horarios especiales
           o agregar una clase manualmente.
+          En el panel también podés abrir
+          fechas anteriores para consultar
+          las clases ya registradas.
         </p>
 
         <div
@@ -6348,6 +7115,299 @@ async function addManualClass(iso){
 }
 
 /* ================================================================
+   MODAL GENÉRICO PARA MODIFICACIONES
+   ================================================================ */
+
+function openEditModal({
+  title = 'Modificar',
+  label = '',
+  value = '',
+  inputType = 'text',
+  textarea = false,
+  placeholder = '',
+  confirmText = 'Guardar cambios',
+  formatMoney = false
+} = {}){
+
+  return new Promise(resolve=>{
+
+    const previousModal =
+      document.getElementById(
+        'app-edit-modal'
+      );
+
+    if(previousModal){
+      previousModal.remove();
+    }
+
+
+    const overlay =
+      document.createElement('div');
+
+    overlay.id =
+      'app-edit-modal';
+
+    overlay.setAttribute(
+      'role',
+      'dialog'
+    );
+
+    overlay.setAttribute(
+      'aria-modal',
+      'true'
+    );
+
+    overlay.style.cssText = `
+      position:fixed;
+      inset:0;
+      z-index:99999;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      background:rgba(8, 16, 28, .66);
+      backdrop-filter:blur(4px);
+    `;
+
+
+    const card =
+      document.createElement('div');
+
+    card.style.cssText = `
+      width:min(100%, 460px);
+      max-height:calc(100vh - 40px);
+      overflow:auto;
+      border:1px solid var(--line, #d8d8d8);
+      border-radius:18px;
+      background:var(--paper, #fff);
+      color:var(--ink, #1f2937);
+      box-shadow:0 24px 70px rgba(0, 0, 0, .32);
+      padding:22px;
+    `;
+
+
+    const heading =
+      document.createElement('h3');
+
+    heading.textContent = title;
+
+    heading.style.cssText = `
+      margin:0 0 18px;
+      font-size:22px;
+      line-height:1.2;
+    `;
+
+    card.appendChild(heading);
+
+
+    if(label){
+
+      const labelElement =
+        document.createElement('label');
+
+      labelElement.textContent = label;
+
+      labelElement.style.cssText = `
+        display:block;
+        margin-bottom:8px;
+        font-size:14px;
+        font-weight:700;
+      `;
+
+      card.appendChild(labelElement);
+
+    }
+
+
+    const field = textarea
+      ? document.createElement('textarea')
+      : document.createElement('input');
+
+    if(!textarea){
+      field.type = inputType;
+    }
+
+    field.value =
+      String(value ?? '');
+
+    field.placeholder =
+      placeholder;
+
+    field.style.cssText = `
+      width:100%;
+      box-sizing:border-box;
+      min-height:${textarea ? '130px' : '48px'};
+      resize:${textarea ? 'vertical' : 'none'};
+      border:1px solid var(--line, #cbd5e1);
+      border-radius:12px;
+      background:var(--cream-dim, #f8fafc);
+      color:var(--ink, #1f2937);
+      font:inherit;
+      font-size:16px;
+      padding:12px 14px;
+      outline:none;
+    `;
+
+    if(formatMoney){
+
+      field.inputMode =
+        'decimal';
+
+      field.addEventListener(
+        'input',
+        ()=>{
+          field.value =
+            formatMoneyInputValue(
+              field.value
+            );
+        }
+      );
+
+    }
+
+    card.appendChild(field);
+
+
+    const actions =
+      document.createElement('div');
+
+    actions.style.cssText = `
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      margin-top:20px;
+      flex-wrap:wrap;
+    `;
+
+
+    const cancelButton =
+      document.createElement('button');
+
+    cancelButton.type = 'button';
+    cancelButton.className = 'mini-btn';
+    cancelButton.textContent = 'Cancelar';
+
+
+    const confirmButton =
+      document.createElement('button');
+
+    confirmButton.type = 'button';
+    confirmButton.className = 'mini-btn ok';
+    confirmButton.textContent =
+      confirmText;
+
+
+    actions.appendChild(
+      cancelButton
+    );
+
+    actions.appendChild(
+      confirmButton
+    );
+
+    card.appendChild(actions);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+
+    const closeModal = value=>{
+
+      document.removeEventListener(
+        'keydown',
+        onKeyDown
+      );
+
+      overlay.remove();
+      resolve(value);
+
+    };
+
+
+    const submitModal = ()=>{
+      closeModal(field.value);
+    };
+
+
+    const onKeyDown = event=>{
+
+      if(event.key === 'Escape'){
+        event.preventDefault();
+        closeModal(null);
+        return;
+      }
+
+      if(
+        event.key === 'Enter' &&
+        !textarea
+      ){
+        event.preventDefault();
+        submitModal();
+      }
+
+    };
+
+
+    document.addEventListener(
+      'keydown',
+      onKeyDown
+    );
+
+    cancelButton.addEventListener(
+      'click',
+      ()=>closeModal(null)
+    );
+
+    confirmButton.addEventListener(
+      'click',
+      submitModal
+    );
+
+    overlay.addEventListener(
+      'click',
+      event=>{
+        if(event.target === overlay){
+          closeModal(null);
+        }
+      }
+    );
+
+    field.addEventListener(
+      'focus',
+      ()=>{
+        field.style.borderColor =
+          'var(--amber, #E8A33D)';
+      }
+    );
+
+    field.addEventListener(
+      'blur',
+      ()=>{
+        field.style.borderColor =
+          'var(--line, #cbd5e1)';
+      }
+    );
+
+
+    setTimeout(
+      ()=>{
+        field.focus();
+
+        if(
+          !textarea &&
+          inputType !== 'time'
+        ){
+          field.select();
+        }
+      },
+      0
+    );
+
+  });
+
+}
+
+
+/* ================================================================
    CAMBIAR HORARIO
    ================================================================ */
 
@@ -6365,12 +7425,20 @@ async function changeBookingTime(id){
 
 
   const newTime =
-    prompt(
-      'Nuevo horario de la clase:',
-      booking.time ||
-      booking.preferredTime ||
-      ''
-    );
+    await openEditModal({
+      title:
+        'Cambiar horario',
+      label:
+        'Nuevo horario de la clase',
+      value:
+        booking.time ||
+        booking.preferredTime ||
+        '',
+      inputType:
+        'time',
+      confirmText:
+        'Guardar horario'
+    });
 
 
   if(newTime === null){
@@ -7914,7 +8982,12 @@ function renderAdminStudents(){
 
           <div class="f">
 
-            <label>
+            <label
+              style="
+                display:block;
+                margin-bottom:8px;
+              "
+            >
               Licencia de conducir
             </label>
 
@@ -7922,8 +8995,11 @@ function renderAdminStudents(){
               style="
                 display:flex;
                 align-items:center;
-                gap:8px;
-                margin-top:8px;
+                justify-content:flex-start;
+                gap:10px;
+                width:max-content;
+                max-width:100%;
+                margin:0;
                 cursor:pointer;
               "
             >
@@ -7931,10 +9007,27 @@ function renderAdminStudents(){
               <input
                 id="st-has-license"
                 type="checkbox"
-                style="width:auto;"
+                style="
+                  width:18px !important;
+                  min-width:18px !important;
+                  max-width:18px !important;
+                  height:18px;
+                  margin:0;
+                  padding:0;
+                  flex:0 0 18px;
+                "
               >
 
-              Tiene licencia
+              <span
+                style="
+                  display:inline-block;
+                  width:auto;
+                  white-space:nowrap;
+                  line-height:1.3;
+                "
+              >
+                Tiene licencia
+              </span>
 
             </label>
 
@@ -8193,7 +9286,12 @@ function renderAdminStudents(){
 
                                 <div class="f">
 
-                                  <label>
+                                  <label
+                                    style="
+                                      display:block;
+                                      margin-bottom:8px;
+                                    "
+                                  >
                                     Licencia de conducir
                                   </label>
 
@@ -8201,8 +9299,11 @@ function renderAdminStudents(){
                                     style="
                                       display:flex;
                                       align-items:center;
-                                      gap:8px;
-                                      margin-top:8px;
+                                      justify-content:flex-start;
+                                      gap:10px;
+                                      width:max-content;
+                                      max-width:100%;
+                                      margin:0;
                                       cursor:pointer;
                                     "
                                   >
@@ -8210,7 +9311,15 @@ function renderAdminStudents(){
                                     <input
                                       id="edit-st-license-${student.id}"
                                       type="checkbox"
-                                      style="width:auto;"
+                                      style="
+                                        width:18px !important;
+                                        min-width:18px !important;
+                                        max-width:18px !important;
+                                        height:18px;
+                                        margin:0;
+                                        padding:0;
+                                        flex:0 0 18px;
+                                      "
                                       ${
                                         student.hasLicense
                                           ? 'checked'
@@ -8218,7 +9327,16 @@ function renderAdminStudents(){
                                       }
                                     >
 
-                                    Tiene licencia
+                                    <span
+                                      style="
+                                        display:inline-block;
+                                        width:auto;
+                                        white-space:nowrap;
+                                        line-height:1.3;
+                                      "
+                                    >
+                                      Tiene licencia
+                                    </span>
 
                                   </label>
 
@@ -8351,7 +9469,10 @@ function renderAdminStudents(){
                                   style="
                                     display:flex;
                                     align-items:center;
-                                    gap:8px;
+                                    justify-content:flex-start;
+                                    gap:10px;
+                                    width:max-content;
+                                    max-width:100%;
                                     margin:
                                       0 0 5px;
                                     cursor:pointer;
@@ -8360,7 +9481,15 @@ function renderAdminStudents(){
 
                                   <input
                                     type="checkbox"
-                                    style="width:auto;"
+                                    style="
+                                      width:18px !important;
+                                      min-width:18px !important;
+                                      max-width:18px !important;
+                                      height:18px;
+                                      margin:0;
+                                      padding:0;
+                                      flex:0 0 18px;
+                                    "
                                     ${
                                       student.hasLicense
                                         ? 'checked'
@@ -8375,7 +9504,15 @@ function renderAdminStudents(){
                                     "
                                   >
 
-                                  Tiene licencia de conducir
+                                  <span
+                                    style="
+                                      display:inline-block;
+                                      width:auto;
+                                      line-height:1.3;
+                                    "
+                                  >
+                                    Tiene licencia de conducir
+                                  </span>
 
                                 </label>
 
@@ -9477,10 +10614,18 @@ async function editStudentObservation(
 
 
   const newText =
-    prompt(
-      'Editar observación:',
-      item.observation
-    );
+    await openEditModal({
+      title:
+        'Editar observación',
+      label:
+        'Observación',
+      value:
+        item.observation,
+      textarea:
+        true,
+      confirmText:
+        'Guardar cambios'
+    });
 
 
   if(newText === null){
@@ -10305,6 +11450,7 @@ const pendingTotal =
                       <th>Alumna</th>
                       <th>Descripción</th>
                       <th>Monto</th>
+                      <th>Medio de pago</th>
                       <th></th>
                     </tr>
 
@@ -10347,13 +11493,36 @@ const pendingTotal =
                         </td>
 
 
+                        <td>
+
+                          <select
+                            id="due-method-${item.id}"
+                            style="min-width:140px;"
+                          >
+                            <option value="">
+                              Elegí el medio
+                            </option>
+
+                            <option value="cash">
+                              Efectivo
+                            </option>
+
+                            <option value="transfer">
+                              Transferencia
+                            </option>
+                          </select>
+
+                        </td>
+
+
                         <td class="btnrow">
 
                           <button
                             class="mini-btn ok"
                             onclick="
                               resolvePaymentDue(
-                                '${item.id}'
+                                '${item.id}',
+                                this
                               )
                             "
                           >
@@ -10405,6 +11574,7 @@ const pendingTotal =
                       <th>Medio</th>
                       <th>Descripción</th>
                       <th>Monto</th>
+                      <th>Acciones</th>
                     </tr>
 
 
@@ -10460,6 +11630,35 @@ const pendingTotal =
                               }
                             </td>
 
+
+                            <td class="btnrow">
+
+                              <button
+                                class="mini-btn"
+                                onclick="
+                                  editPayment(
+                                    '${payment.id}',
+                                    this
+                                  )
+                                "
+                              >
+                                Modificar
+                              </button>
+
+                              <button
+                                class="mini-btn no"
+                                onclick="
+                                  deletePayment(
+                                    '${payment.id}',
+                                    this
+                                  )
+                                "
+                              >
+                                Eliminar
+                              </button>
+
+                            </td>
+
                           </tr>
 
                         `)
@@ -10483,6 +11682,344 @@ const pendingTotal =
     `;
 }
 
+
+
+async function editPayment(
+  paymentId,
+  button
+){
+
+  if(
+    button &&
+    button.disabled
+  ){
+    return;
+  }
+
+
+  const payment =
+    DB.payments.find(
+      item=>item.id === paymentId
+    );
+
+
+  if(!payment){
+    return;
+  }
+
+
+  const enteredAmount =
+    await openEditModal({
+      title:
+        'Modificar pago',
+      label:
+        'Monto correcto del pago',
+      value:
+        formatMoneyInputValue(
+          payment.amount
+        ),
+      inputType:
+        'text',
+      formatMoney:
+        true,
+      confirmText:
+        'Guardar monto'
+    });
+
+
+  if(enteredAmount === null){
+    return;
+  }
+
+
+  const amount =
+    parseMoneyInput(
+      enteredAmount
+    );
+
+
+  if(
+    !amount ||
+    amount <= 0
+  ){
+
+    alert(
+      'Ingresá un monto válido.'
+    );
+
+    return;
+  }
+
+
+  if(amount === payment.amount){
+    return;
+  }
+
+
+  const linkedDue =
+    (DB.paymentDues || [])
+      .find(
+        item=>
+          item.paymentId ===
+            paymentId
+      );
+
+
+  if(button){
+    button.disabled = true;
+    button.textContent =
+      'Guardando...';
+  }
+
+
+  try{
+
+    const { error: paymentError } =
+      await supabaseClient
+
+        .from('payments')
+
+        .update({
+          amount
+        })
+
+        .eq(
+          'id',
+          paymentId
+        );
+
+
+    if(paymentError){
+      throw paymentError;
+    }
+
+
+    /*
+      Si este pago nació al resolver
+      un saldo pendiente, mantenemos
+      ambos montos sincronizados.
+    */
+    if(linkedDue){
+
+      const { error: dueError } =
+        await supabaseClient
+
+          .from('payment_dues')
+
+          .update({
+            amount
+          })
+
+          .eq(
+            'id',
+            linkedDue.id
+          );
+
+
+      if(dueError){
+
+        /*
+          Intentamos dejar el pago como
+          estaba si no se pudo sincronizar
+          el saldo relacionado.
+        */
+        await supabaseClient
+          .from('payments')
+          .update({
+            amount:
+              payment.amount
+          })
+          .eq(
+            'id',
+            paymentId
+          );
+
+        throw dueError;
+      }
+    }
+
+
+    await loadAdminData();
+
+    renderAdminPayments();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo modificar el pago.'
+    );
+
+
+    if(button){
+      button.disabled = false;
+      button.textContent =
+        'Modificar';
+    }
+
+  }
+}
+
+
+async function deletePayment(
+  paymentId,
+  button
+){
+
+  if(
+    button &&
+    button.disabled
+  ){
+    return;
+  }
+
+
+  const payment =
+    DB.payments.find(
+      item=>item.id === paymentId
+    );
+
+
+  if(!payment){
+    return;
+  }
+
+
+  const linkedDue =
+    (DB.paymentDues || [])
+      .find(
+        item=>
+          item.paymentId ===
+            paymentId
+      );
+
+
+  const message =
+    linkedDue
+
+      ? (
+          'Este pago proviene de un saldo pendiente resuelto. ' +
+          'Si lo eliminás, ese saldo volverá a aparecer como pendiente.\n\n' +
+          '¿Querés continuar?'
+        )
+
+      : (
+          '¿Querés eliminar este pago de ' +
+          fmtMoney(payment.amount) +
+          '?'
+        );
+
+
+  if(!confirm(message)){
+    return;
+  }
+
+
+  if(button){
+    button.disabled = true;
+    button.textContent =
+      'Eliminando...';
+  }
+
+
+  try{
+
+    /*
+      Si estaba asociado a un saldo
+      pendiente resuelto, primero lo
+      devolvemos a pendiente y quitamos
+      el vínculo con el pago.
+    */
+    if(linkedDue){
+
+      const { error: dueError } =
+        await supabaseClient
+
+          .from('payment_dues')
+
+          .update({
+            status:
+              'pending',
+
+            resolved_at:
+              null,
+
+            payment_id:
+              null
+          })
+
+          .eq(
+            'id',
+            linkedDue.id
+          );
+
+
+      if(dueError){
+        throw dueError;
+      }
+    }
+
+
+    const { error: deleteError } =
+      await supabaseClient
+
+        .from('payments')
+
+        .delete()
+
+        .eq(
+          'id',
+          paymentId
+        );
+
+
+    if(deleteError){
+
+      if(linkedDue){
+        await supabaseClient
+          .from('payment_dues')
+          .update({
+            status:
+              linkedDue.status,
+
+            resolved_at:
+              linkedDue.resolvedAt,
+
+            payment_id:
+              paymentId
+          })
+          .eq(
+            'id',
+            linkedDue.id
+          );
+      }
+
+      throw deleteError;
+    }
+
+
+    await loadAdminData();
+
+    renderAdminPayments();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo eliminar el pago.'
+    );
+
+
+    if(button){
+      button.disabled = false;
+      button.textContent =
+        'Eliminar';
+    }
+
+  }
+}
 
 
 async function addPayment(){
@@ -10745,20 +12282,144 @@ async function addPaymentDue(){
 
 
 
-async function resolvePaymentDue(id){
+async function resolvePaymentDue(
+  id,
+  button
+){
+
+  if(
+    button &&
+    button.disabled
+  ){
+    return;
+  }
+
+
+  const due =
+    (DB.paymentDues || [])
+      .find(
+        item=>
+          item.id === id &&
+          item.status === 'pending'
+      );
+
+
+  if(!due){
+    return;
+  }
+
+
+  const methodSelect =
+    document.getElementById(
+      'due-method-' + id
+    );
+
+
+  const method =
+    methodSelect
+      ? methodSelect.value
+      : '';
+
+
+  if(!method){
+
+    alert(
+      'Elegí si el pago fue en efectivo o por transferencia.'
+    );
+
+    if(methodSelect){
+      methodSelect.focus();
+    }
+
+    return;
+  }
+
 
   if(
     !confirm(
-      '¿Confirmás que este saldo ya fue resuelto?'
+      '¿Confirmás que ' +
+      due.studentName +
+      ' pagó ' +
+      fmtMoney(due.amount) +
+      '?\n\nEl pago se agregará automáticamente al historial.'
     )
   ){
     return;
   }
 
 
+  if(button){
+    button.disabled = true;
+    button.textContent =
+      'Guardando...';
+  }
+
+
+  let createdPaymentId = null;
+  let operationCompleted = false;
+
+
   try{
 
-    const { error } =
+    const paymentDescription =
+      due.description
+
+        ? (
+            'Saldo pendiente resuelto: ' +
+            due.description
+          )
+
+        : 'Saldo pendiente resuelto';
+
+
+    const {
+      data: paymentRow,
+      error: paymentError
+    } =
+      await supabaseClient
+
+        .from('payments')
+
+        .insert({
+
+          student_id:
+            due.studentId,
+
+          student_name:
+            due.studentName,
+
+          amount:
+            due.amount,
+
+          payment_method:
+            method,
+
+          payment_date:
+            todayISO(),
+
+          description:
+            paymentDescription
+
+        })
+
+        .select('id')
+
+        .single();
+
+
+    if(paymentError){
+      throw paymentError;
+    }
+
+
+    createdPaymentId =
+      paymentRow.id;
+
+
+    const {
+      data: updatedDue,
+      error: dueError
+    } =
       await supabaseClient
 
         .from('payment_dues')
@@ -10770,32 +12431,106 @@ async function resolvePaymentDue(id){
 
           resolved_at:
             new Date()
-              .toISOString()
+              .toISOString(),
+
+          payment_id:
+            createdPaymentId
 
         })
 
         .eq(
           'id',
           id
-        );
+        )
+
+        .eq(
+          'status',
+          'pending'
+        )
+
+        .select('id')
+
+        .maybeSingle();
 
 
-    if(error){
-      throw error;
+    if(dueError){
+      throw dueError;
     }
 
 
-    await loadAdminData();
+    if(!updatedDue){
+      throw new Error(
+        'Este saldo ya no está pendiente.'
+      );
+    }
 
-    renderAdminPayments();
+
+    operationCompleted = true;
+
+
+    try{
+
+      await loadAdminData();
+
+      renderAdminPayments();
+
+
+    }catch(refreshError){
+
+      console.error(
+        'El pago se guardó, pero no se pudo recargar la pantalla:',
+        refreshError
+      );
+
+      alert(
+        'El pago se registró correctamente, pero no se pudo actualizar la pantalla. Recargá la página.'
+      );
+
+    }
 
 
   }catch(error){
 
+    /*
+      Si el pago llegó a crearse pero
+      después falló la actualización del
+      saldo, lo borramos para no dejar un
+      cobro duplicado o incompleto.
+    */
+    if(
+      createdPaymentId &&
+      !operationCompleted
+    ){
+
+      const rollbackResult =
+        await supabaseClient
+          .from('payments')
+          .delete()
+          .eq(
+            'id',
+            createdPaymentId
+          );
+
+      if(rollbackResult.error){
+        console.error(
+          'No se pudo revertir el pago creado:',
+          rollbackResult.error
+        );
+      }
+    }
+
+
     showDatabaseError(
       error,
-      'No se pudo actualizar el saldo pendiente.'
+      'No se pudo resolver el saldo pendiente.'
     );
+
+
+    if(button){
+      button.disabled = false;
+      button.textContent =
+        'Marcar como resuelto';
+    }
 
   }
 }
