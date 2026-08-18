@@ -4730,8 +4730,17 @@ function ensureAdminSidebarUI(){
       }
 
       .admin-top .wrap >
-      div:last-child{
+      div:not(.brand){
         display:none !important;
+      }
+
+      .admin-top .brand{
+        flex:1 1 auto;
+        min-width:0;
+        max-width:none;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
       }
 
       .admin-menu-toggle{
@@ -4964,22 +4973,42 @@ function ensureAdminSidebarUI(){
       @media(max-width:768px){
 
         .admin-top .wrap{
+          width:100% !important;
           padding:
             12px 14px !important;
+          flex-direction:row !important;
+          flex-wrap:nowrap !important;
+          align-items:center !important;
+          justify-content:space-between !important;
+          gap:10px !important;
+          box-sizing:border-box;
         }
 
         .admin-top .brand{
           width:auto !important;
-          max-width:
-            calc(100% - 100px);
+          max-width:none !important;
+          flex:1 1 auto !important;
+          min-width:0 !important;
+          margin:0 !important;
           font-size:14px !important;
           line-height:1.2;
+          white-space:nowrap !important;
+          overflow:hidden !important;
+          text-overflow:ellipsis !important;
+        }
+
+        .admin-top .brand .dot{
+          flex:0 0 auto;
         }
 
         .admin-menu-toggle{
+          flex:0 0 auto !important;
+          min-width:auto !important;
+          width:auto !important;
           min-height:40px;
           padding:8px 12px;
           font-size:13px;
+          white-space:nowrap;
         }
 
         .admin-main{
@@ -6528,37 +6557,12 @@ function renderAdminAgenda(){
         class="lede"
         style="margin-bottom:22px;"
       >
-        Configurá tus horarios habituales,
+        Consultá las clases del mes,
         administrá solicitudes y agregá
         clases manualmente.
+        Al final podés configurar
+        los horarios habituales.
       </p>
-
-
-      <div class="panel">
-
-        <h3>
-          Horarios habituales
-        </h3>
-
-        <p class="note">
-          Podés agregar más de un rango
-          para el mismo día.
-          Por ejemplo:
-          09:00 - 12:00 y
-          16:00 - 20:00.
-          El horario final también puede
-          elegirse como inicio de una clase.
-        </p>
-
-        <div
-          style="
-            margin-top:18px;
-          "
-        >
-          ${renderWeeklySchedule()}
-        </div>
-
-      </div>
 
 
       <div class="panel">
@@ -6600,6 +6604,33 @@ function renderAdminAgenda(){
         class="panel"
         id="admin-monthly-classes"
       ></div>
+
+
+      <div class="panel">
+
+        <h3>
+          Horarios habituales
+        </h3>
+
+        <p class="note">
+          Podés agregar más de un rango
+          para el mismo día.
+          Por ejemplo:
+          09:00 - 12:00 y
+          16:00 - 20:00.
+          El horario final también puede
+          elegirse como inicio de una clase.
+        </p>
+
+        <div
+          style="
+            margin-top:18px;
+          "
+        >
+          ${renderWeeklySchedule()}
+        </div>
+
+      </div>
 
     `;
 
