@@ -285,7 +285,8 @@ function defaultDB(){
       zonas:'',
       requisitos:'',
       autoPropio:'',
-      cancelacion:''
+      cancelacion:'',
+      faqs:[]
     },
     schedule:{
   blocked:{}
@@ -321,6 +322,67 @@ function requireNoError(result, label){
   }
 
   return result.data || [];
+}
+
+
+function normalizeFaqItems(
+  rawFaqs,
+  settingsRow = {}
+){
+  let items =
+    Array.isArray(rawFaqs)
+      ? rawFaqs
+      : [];
+
+  if(!items.length){
+    items = [
+      {
+        id:'faq-zonas',
+        question:'¿En qué zonas trabajan?',
+        answer:settingsRow.zones || ''
+      },
+      {
+        id:'faq-auto',
+        question:'¿Necesito auto propio para las clases?',
+        answer:settingsRow.own_car || ''
+      },
+      {
+        id:'faq-requisitos',
+        question:'¿Qué necesito para empezar?',
+        answer:settingsRow.requirements || ''
+      },
+      {
+        id:'faq-cancelacion',
+        question:'¿Cuál es la política de cancelación?',
+        answer:settingsRow.cancellation_policy || ''
+      }
+    ];
+  }
+
+  return items
+    .map((item,index)=>(
+      {
+        id:String(
+          item.id ||
+          ('faq-' + index)
+        ),
+        question:String(
+          item.question ||
+          item.q ||
+          ''
+        ).trim(),
+        answer:String(
+          item.answer ||
+          item.a ||
+          ''
+        ).trim()
+      }
+    ))
+    .filter(
+      item=>
+        item.question ||
+        item.answer
+    );
 }
 
 function mapServices(rows){
@@ -393,6 +455,11 @@ preferredTime:
       publicOnly
         ? ''
         : (row.phone || ''),
+
+    address:
+      publicOnly
+        ? ''
+        : (row.address || ''),
 
     studentId:
       publicOnly
@@ -715,7 +782,13 @@ DB.promos = promosRows.map(row=>({
 
     cancelacion:
       settingsRow
-        .cancellation_policy || ''
+        .cancellation_policy || '',
+
+    faqs:
+      normalizeFaqItems(
+        settingsRow.faqs,
+        settingsRow
+      )
   };
 
   DB.schedule = {
@@ -1164,7 +1237,7 @@ const PUB_SECTIONS = [
   },
   {
     id: 'servicios',
-    label: 'Servicios y precios'
+    label: 'Promociones'
   },
   {
     id: 'reservas',
@@ -1229,22 +1302,111 @@ function getSavedAdminTab(){
 
 let currentPub = 'inicio';
 
-function toggleMobileNav(){
-  document
-    .getElementById('pub-nav')
-    .classList
-    .toggle('open');
+
+function ensurePublicOnePageStyles(){
+  if(
+    document.getElementById(
+      'public-one-page-styles'
+    )
+  ){
+    return;
+  }
+
+  const style =
+    document.createElement(
+      'style'
+    );
+
+  style.id =
+    'public-one-page-styles';
+
+  style.textContent = `
+    html{
+      scroll-behavior:smooth;
+    }
+
+    #public-view header.site{
+      box-shadow:
+        0 8px 28px
+        rgba(10,18,27,.12);
+    }
+
+    #pub-sections > section{
+      scroll-margin-top:90px;
+      position:relative;
+      border-bottom:
+        1px solid
+        rgba(31,45,60,.07);
+    }
+
+    #pub-sections .panel,
+    #pub-sections .faq-item,
+    #pub-sections .gphoto{
+      transition:
+        transform .18s ease,
+        box-shadow .18s ease,
+        border-color .18s ease;
+    }
+
+    @media(hover:hover){
+      #pub-sections .panel:hover,
+      #pub-sections .faq-item:hover,
+      #pub-sections .gphoto:hover{
+        transform:translateY(-2px);
+        box-shadow:
+          0 12px 30px
+          rgba(25,37,49,.08);
+      }
+    }
+
+    #sec-servicios,
+    #sec-galeria,
+    #sec-contacto{
+      background:
+        linear-gradient(
+          180deg,
+          var(--cream) 0%,
+          #fffdf8 100%
+        );
+    }
+
+    #sec-reservas,
+    #sec-faq{
+      background:
+        linear-gradient(
+          180deg,
+          var(--cream-dim) 0%,
+          #f5efe3 100%
+        ) !important;
+    }
+
+    #sec-resenas{
+      background:
+        linear-gradient(
+          180deg,
+          #fffdf8 0%,
+          var(--cream) 100%
+        );
+    }
+
+    @media(max-width:760px){
+      #pub-sections > section{
+        scroll-margin-top:78px;
+      }
+
+      #public-view header.site{
+        backdrop-filter:blur(10px);
+        -webkit-backdrop-filter:blur(10px);
+      }
+    }
+  `;
+
+  document.head
+    .appendChild(style);
 }
 
-async function goPublic(id){
+function updatePublicNavActive(id){
   currentPub = id;
-
-  sessionStorage.setItem(
-    NAV_STATE_KEYS.publicSection,
-    id
-  );
-
-  saveCurrentView('public');
 
   document
     .querySelectorAll(
@@ -1256,28 +1418,123 @@ async function goPublic(id){
         button.dataset.id === id
       );
     });
+}
 
-  document
-    .querySelectorAll(
-      '#pub-sections > section'
-    )
-    .forEach(section=>{
-      section.classList.toggle(
-        'hidden',
-        section.id !==
-          'sec-' + id
-      );
-    });
+function setupPublicSectionObserver(){
+  if(window.__publicSectionObserver){
+    window.__publicSectionObserver
+      .disconnect();
+  }
 
+  const sections =
+    Array.from(
+      document.querySelectorAll(
+        '#pub-sections > section'
+      )
+    );
+
+  if(!sections.length){
+    return;
+  }
+
+  window.__publicSectionObserver =
+    new IntersectionObserver(
+      entries=>{
+        const visible =
+          entries
+            .filter(
+              entry=>entry.isIntersecting
+            )
+            .sort(
+              (a,b)=>
+                b.intersectionRatio -
+                a.intersectionRatio
+            )[0];
+
+        if(!visible){
+          return;
+        }
+
+        const id =
+          visible.target.id.replace(
+            'sec-',
+            ''
+          );
+
+        if(
+          PUB_SECTIONS.some(
+            section=>section.id === id
+          )
+        ){
+          updatePublicNavActive(id);
+          sessionStorage.setItem(
+            NAV_STATE_KEYS.publicSection,
+            id
+          );
+        }
+      },
+      {
+        root:null,
+        rootMargin:'-22% 0px -58% 0px',
+        threshold:[0.05,0.15,0.3,0.5]
+      }
+    );
+
+  sections.forEach(
+    section=>
+      window.__publicSectionObserver
+        .observe(section)
+  );
+}
+
+async function renderAllPublicSections(){
+  renderServicesPublic();
+  renderGalleryPublic();
+  renderReviewsPublic();
+  renderFAQ();
+  renderContact();
+
+  await refreshPublicSchedule();
+  renderCalendarPublic();
+  setupPublicSectionObserver();
+}
+
+function toggleMobileNav(){
   document
     .getElementById('pub-nav')
     .classList
-    .remove('open');
+    .toggle('open');
+}
 
-  window.scrollTo({
-    top: 0,
-    behavior: 'smooth'
-  });
+async function goPublic(id){
+  if(
+    !PUB_SECTIONS.some(
+      section=>section.id === id
+    )
+  ){
+    id = 'inicio';
+  }
+
+  currentPub = id;
+
+  sessionStorage.setItem(
+    NAV_STATE_KEYS.publicSection,
+    id
+  );
+
+  saveCurrentView('public');
+  updatePublicNavActive(id);
+
+  const publicNav =
+    document.getElementById(
+      'pub-nav'
+    );
+
+  if(publicNav){
+    publicNav.classList.remove(
+      'open'
+    );
+  }
 
   try{
     if(id === 'reservas'){
@@ -1309,22 +1566,18 @@ async function goPublic(id){
       'No se pudo actualizar la sección pública:',
       error
     );
+  }
 
-    if(id === 'reservas'){
-      const panel =
-        document.getElementById(
-          'slot-panel'
-        );
+  const target =
+    document.getElementById(
+      'sec-' + id
+    );
 
-      if(panel){
-        panel.innerHTML = `
-          <div class="error-box">
-            No se pudieron cargar los horarios.
-            Revisá tu conexión e intentá nuevamente.
-          </div>
-        `;
-      }
-    }
+  if(target){
+    target.scrollIntoView({
+      behavior:'smooth',
+      block:'start'
+    });
   }
 }
 
@@ -1518,121 +1771,208 @@ function wheelSVG(){
    ================================================================== */
 
 function renderServicesPublic(){
-  const services = DB.services || [];
+
   const activePromos =
-    (DB.promos || []).filter(p=>p.active);
+    (DB.promos || [])
+      .filter(
+        promo=>promo.active
+      );
 
-  document.getElementById(
-    'services-cards'
-  ).innerHTML = services.length ? `
-    <div class="grid3">
 
-      ${services.map(service=>`
-        <div class="card">
+  const container =
+    document.getElementById(
+      'promos-strip'
+    );
 
-          <h3>
-            ${escapeHTML(service.name)}
-          </h3>
 
-          ${
-            service.desc
-              ? `
-                <p>
-                  ${escapeHTML(service.desc)}
-                </p>
-              `
-              : ''
-          }
+  if(!container){
+    return;
+  }
 
-          ${
-            service.price !== null
-              ? `
-                <div class="price">
-                  ${fmtMoney(service.price)}
-                </div>
-              `
-              : `
-                <div class="note">
-                  Consultá el precio
-                </div>
-              `
-          }
 
-          <button
-            class="cta-btn small"
-            onclick="goPublic('reservas')"
+  const whatsapp =
+    DB.settings &&
+    DB.settings.whatsapp
+      ? DB.settings.whatsapp
+      : '';
+
+
+  container.innerHTML =
+    activePromos.length
+
+      ? `
+
+          <div
+            class="grid3"
+            style="
+              margin-top:24px;
+            "
           >
-            Reservar clase
-          </button>
 
-        </div>
-      `).join('')}
+            ${activePromos.map(
+              promo=>{
 
-    </div>
-  ` : `
-    <div class="empty">
-      Todavía no hay clases disponibles
-      para mostrar.
-    </div>
-  `;
+                const message =
+                  'Hola! Quiero consultar por la promoción "' +
+                  promo.title +
+                  '".';
 
 
-  document.getElementById(
-    'promos-strip'
-  ).innerHTML = activePromos.length ? `
+                return `
 
-    <h3 style="margin-bottom:14px;">
-      Promos activas
-    </h3>
+                  <div
+                    class="card"
+                    style="
+                      display:flex;
+                      flex-direction:column;
+                      height:100%;
+                    "
+                  >
 
-    ${activePromos.map(p=>`
-      <div class="promo-card">
+                    ${
+                      promo.badge
+                        ? `
+                            <div
+                              class="eyebrow"
+                              style="
+                                margin-bottom:8px;
+                              "
+                            >
+                              ${
+                                escapeHTML(
+                                  promo.badge
+                                )
+                              }
+                            </div>
+                          `
+                        : ''
+                    }
 
-        <div>
 
-          <h4>
-            ${escapeHTML(p.title)}
-          </h4>
+                    <h3>
+                      ${
+                        escapeHTML(
+                          promo.title
+                        )
+                      }
+                    </h3>
 
-          ${
-            p.desc
-              ? `
-                <p>
-                  ${escapeHTML(p.desc)}
-                </p>
-              `
-              : ''
-          }
 
-          ${
-            p.price !== null
-              ? `
-                <div
-                  class="price"
-                  style="margin-top:8px;"
-                >
-                  ${fmtMoney(p.price)}
-                </div>
-              `
-              : ''
-          }
+                    ${
+                      promo.desc
+                        ? `
+                            <p
+                              style="
+                                flex:1 1 auto;
+                              "
+                            >
+                              ${
+                                escapeHTML(
+                                  promo.desc
+                                )
+                              }
+                            </p>
+                          `
+                        : `
+                            <p
+                              class="note"
+                              style="
+                                flex:1 1 auto;
+                              "
+                            >
+                              Consultanos para conocer
+                              todos los detalles.
+                            </p>
+                          `
+                    }
 
-        </div>
 
-        ${
-          p.badge
-            ? `
-              <span class="promo-badge">
-                ${escapeHTML(p.badge)}
-              </span>
-            `
-            : ''
-        }
+                    ${
+                      promo.price !== null &&
+                      promo.price !== undefined
+                        ? `
+                            <div
+                              style="
+                                margin-top:8px;
+                                font-family:
+                                  'Space Grotesk',
+                                  sans-serif;
+                                font-size:24px;
+                                font-weight:700;
+                                color:var(--asphalt);
+                              "
+                            >
+                              ${
+                                fmtMoney(
+                                  promo.price
+                                )
+                              }
+                            </div>
+                          `
+                        : ''
+                    }
 
-      </div>
-    `).join('')}
 
-  ` : '';
+                    ${
+                      whatsapp
+                        ? `
+                            <a
+                              class="cta-btn small"
+                              target="_blank"
+                              rel="
+                                noopener noreferrer
+                              "
+                              href="${
+                                waLink(
+                                  whatsapp,
+                                  message
+                                )
+                              }"
+                              style="
+                                display:inline-flex;
+                                align-items:center;
+                                justify-content:center;
+                                width:max-content;
+                                margin-top:16px;
+                                text-decoration:none;
+                              "
+                            >
+                              Consultar por WhatsApp
+                            </a>
+                          `
+                        : `
+                            <button
+                              class="cta-btn small"
+                              type="button"
+                              disabled
+                              style="
+                                width:max-content;
+                                margin-top:16px;
+                              "
+                            >
+                              Consultar por WhatsApp
+                            </button>
+                          `
+                    }
+
+                  </div>
+
+                `;
+
+              }
+            ).join('')}
+
+          </div>
+
+        `
+
+      : `
+          <div class="empty">
+            No hay promociones activas
+            en este momento.
+          </div>
+        `;
+
 }
 
 /* ==================================================================
@@ -2754,10 +3094,6 @@ async function confirmPreferredTime(){
 
 function bookingFormHTML(){
 
-  const services =
-    DB.services || [];
-
-
   const chosenTime =
     pubTimeMode === 'available'
 
@@ -2853,63 +3189,20 @@ function bookingFormHTML(){
       <div class="field">
 
         <label>
-          Clase
+          Dirección de tu domicilio
         </label>
 
-        <select
-          id="bk-service"
+        <input
           required
+          id="bk-address"
+          autocomplete="street-address"
+          placeholder="Ejemplo: San Martín 1250"
         >
 
-          ${
-            services.length
-
-              ? services
-                  .map(
-                    service=>`
-
-                      <option
-                        value="${
-                          escapeHTML(
-                            service.id
-                          )
-                        }"
-                      >
-
-                        ${
-                          escapeHTML(
-                            service.name
-                          )
-                        }
-
-                        ${
-                          service.price !==
-                            null
-
-                            ? ' — ' +
-                              fmtMoney(
-                                service.price
-                              )
-
-                            : ''
-                        }
-
-                      </option>
-
-                    `
-                  )
-                  .join('')
-
-              : `
-
-                  <option value="">
-                    No hay clases disponibles
-                  </option>
-
-                `
-          }
-
-        </select>
+        <p class="note">
+          Escribí la dirección desde donde
+          vas a realizar la clase.
+        </p>
 
       </div>
 
@@ -2931,12 +3224,7 @@ function bookingFormHTML(){
         class="cta-btn"
         type="submit"
         style="width:100%;"
-        ${
-          services.length
-            ? ''
-            : 'disabled'
-        }
-      >
+>
 
         Solicitar turno —
         ${fmtDateHuman(
@@ -3004,31 +3292,20 @@ async function submitBooking(event){
       );
 
 
-  const service =
+  const address =
     document
       .getElementById(
-        'bk-service'
+        'bk-address'
       )
-      .value;
+      .value
+      .trim();
 
-
-  const chosenService =
-    DB.services.find(
-      item=>
-        item.id === service
-    );
-
-
-  if(!chosenService){
-
+  if(address.length < 5){
     messageBox.innerHTML = `
-
       <div class="error-box">
-        Elegí una clase disponible.
+        Ingresá la dirección de tu domicilio.
       </div>
-
     `;
-
     return false;
   }
 
@@ -3261,12 +3538,15 @@ if(
           phone,
 
 
+          address,
+
+
           service_id:
-            service,
+            null,
 
 
           service_name:
-            chosenService.name,
+            'Clase de manejo',
 
 
           booking_source:
@@ -3378,6 +3658,12 @@ if(
                 `
           }
 
+          <br><br>
+
+          Domicilio:
+          <strong>
+            ${escapeHTML(address)}
+          </strong>.
           <br><br>
 
           Te vamos a contactar por
@@ -3660,67 +3946,57 @@ async function submitReview(event){
    ================================================================== */
 
 function renderFAQ(){
-  const settings = DB.settings;
-
-  const items = [
-    {
-      q:
-        '¿En qué zonas trabajan?',
-      a:
-        settings.zonas
-    },
-    {
-      q:
-        '¿Necesito auto propio para las clases?',
-      a:
-        settings.autoPropio
-    },
-    {
-      q:
-        '¿Qué necesito para empezar?',
-      a:
-        settings.requisitos
-    },
-    {
-      q:
-        '¿Cuál es la política de cancelación?',
-      a:
-        settings.cancelacion
-    }
-  ];
-
-  document
-    .getElementById(
+  const container =
+    document.getElementById(
       'faq-list'
+    );
+
+  if(!container){
+    return;
+  }
+
+  const items =
+    (
+      DB.settings &&
+      Array.isArray(
+        DB.settings.faqs
+      )
     )
-    .innerHTML =
-      items
-        .map((item, index)=>`
-          <div
-            class="faq-item"
-            id="faq-${index}"
-          >
-            <button
-              class="faq-q"
-              onclick="toggleFaq(${index})"
+      ? DB.settings.faqs
+      : [];
+
+  container.innerHTML =
+    items.length
+      ? items
+          .map((item,index)=>`
+            <div
+              class="faq-item"
+              id="faq-${index}"
             >
-              <span>
-                ${escapeHTML(item.q)}
-              </span>
+              <button
+                class="faq-q"
+                type="button"
+                onclick="toggleFaq(${index})"
+              >
+                <span>
+                  ${escapeHTML(item.question)}
+                </span>
+                <span class="chev">+</span>
+              </button>
 
-              <span class="chev">
-                +
-              </span>
-            </button>
-
-            <div class="faq-a">
-              <inner>
-                ${escapeHTML(item.a)}
-              </inner>
+              <div class="faq-a">
+                <inner>
+                  ${escapeHTML(item.answer)}
+                </inner>
+              </div>
             </div>
+          `)
+          .join('')
+      : `
+          <div class="empty">
+            Todavía no hay preguntas frecuentes cargadas.
           </div>
-        `)
-        .join('');
+        `;
 }
 
 function toggleFaq(index){
@@ -3932,24 +4208,21 @@ function buildPublicSections(){
 
       <section
         id="sec-servicios"
-        class="hidden"
       >
         <div class="wrap">
           <div class="eyebrow">
-            Servicios y precios
+            Promociones
           </div>
 
           <h2 class="title">
-            Elegí cómo querés aprender
+            Promociones disponibles
           </h2>
 
           <p class="lede">
-  Conocé las clases disponibles
-  y elegí la opción que mejor
-  se adapte a lo que necesitás.
-</p>
-
-          <div id="services-cards"></div>
+            Conocé las promociones vigentes
+            y consultá directamente por
+            WhatsApp la que te interese.
+          </p>
 
           <div
             class="promos-strip"
@@ -3960,7 +4233,6 @@ function buildPublicSections(){
 
       <section
         id="sec-reservas"
-        class="hidden"
         style="
           background:var(--cream-dim);
         "
@@ -3996,7 +4268,6 @@ function buildPublicSections(){
 
       <section
         id="sec-galeria"
-        class="hidden"
       >
         <div class="wrap">
           <div class="eyebrow">
@@ -4023,7 +4294,6 @@ function buildPublicSections(){
 
       <section
         id="sec-resenas"
-        class="hidden"
       >
         <div class="wrap">
           <div class="eyebrow">
@@ -4123,7 +4393,6 @@ function buildPublicSections(){
 
       <section
         id="sec-faq"
-        class="hidden"
         style="
           background:var(--cream-dim);
         "
@@ -4146,7 +4415,6 @@ function buildPublicSections(){
 
       <section
         id="sec-contacto"
-        class="hidden"
       >
         <div class="wrap">
           <div class="eyebrow">
@@ -6435,6 +6703,26 @@ function renderMonthlyConfirmedClasses(){
                               : ''
                           }
 
+                          ${
+                            bookingCurrentAddress(
+                              booking
+                            )
+                              ? `
+                                  <br>
+                                  <span class="note">
+                                    Domicilio:
+                                    ${
+                                      escapeHTML(
+                                        bookingCurrentAddress(
+                                          booking
+                                        )
+                                      )
+                                    }
+                                  </span>
+                                `
+                              : ''
+                          }
+
                         </td>
 
 
@@ -7848,6 +8136,37 @@ function bookingCurrentPhone(
 }
 
 
+
+function bookingCurrentAddress(
+  booking
+){
+  if(
+    booking &&
+    booking.studentId
+  ){
+    const student =
+      DB.students.find(
+        item=>
+          item.id === booking.studentId
+      );
+
+    if(
+      student &&
+      student.address
+    ){
+      return student.address;
+    }
+  }
+
+  return (
+    booking &&
+    booking.address
+      ? booking.address
+      : ''
+  );
+}
+
+
 function bookingWhatsAppText(
   booking
 ){
@@ -8506,6 +8825,27 @@ const bookingsDay =
                                     ${
                                       escapeHTML(
                                         bookingCurrentPhone(
+                                          booking
+                                        )
+                                      )
+                                    }
+                                  </span>
+                                `
+                              : ''
+                          }
+
+                          ${
+                            bookingCurrentAddress(
+                              booking
+                            )
+                              ? `
+                                  <br>
+
+                                  <span class="note">
+                                    Domicilio:
+                                    ${
+                                      escapeHTML(
+                                        bookingCurrentAddress(
                                           booking
                                         )
                                       )
@@ -14467,6 +14807,393 @@ async function markRead(id){
 /* ==================================================================
    ADMINISTRADOR: AJUSTES
    ================================================================== */
+function adminFaqCardsHTML(){
+  const faqs =
+    (
+      DB.settings &&
+      Array.isArray(DB.settings.faqs)
+    )
+      ? DB.settings.faqs
+      : [];
+
+  if(!faqs.length){
+    return `
+      <div class="empty">
+        Todavía no hay preguntas frecuentes.
+      </div>
+    `;
+  }
+
+  return faqs
+    .map(item=>`
+      <div
+        style="
+          border:1px solid var(--line);
+          border-radius:10px;
+          padding:16px;
+          margin-bottom:12px;
+          background:var(--paper);
+        "
+      >
+        <div
+          style="
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:14px;
+            flex-wrap:wrap;
+          "
+        >
+          <div
+            style="
+              min-width:0;
+              flex:1 1 320px;
+            "
+          >
+            <strong>
+              ${escapeHTML(item.question)}
+            </strong>
+
+            <p
+              class="note"
+              style="
+                margin:8px 0 0;
+                white-space:pre-wrap;
+              "
+            >
+              ${escapeHTML(item.answer)}
+            </p>
+          </div>
+
+          <div class="btnrow">
+            <button
+              type="button"
+              class="mini-btn"
+              onclick="editFaqItem('${item.id}')"
+            >
+              Modificar
+            </button>
+
+            <button
+              type="button"
+              class="mini-btn no"
+              onclick="deleteFaqItem('${item.id}')"
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    `)
+    .join('');
+}
+
+function openFaqEditorModal({
+  title = 'Pregunta frecuente',
+  question = '',
+  answer = ''
+} = {}){
+  return new Promise(resolve=>{
+    const previous =
+      document.getElementById(
+        'faq-editor-modal'
+      );
+
+    if(previous){
+      previous.remove();
+    }
+
+    const overlay =
+      document.createElement(
+        'div'
+      );
+
+    overlay.id =
+      'faq-editor-modal';
+
+    overlay.setAttribute(
+      'role',
+      'dialog'
+    );
+
+    overlay.setAttribute(
+      'aria-modal',
+      'true'
+    );
+
+    overlay.style.cssText = `
+      position:fixed;
+      inset:0;
+      z-index:100000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      background:rgba(8,16,28,.68);
+    `;
+
+    overlay.innerHTML = `
+      <div
+        style="
+          width:min(100%,560px);
+          max-height:calc(100vh - 40px);
+          overflow:auto;
+          background:var(--paper);
+          border-radius:14px;
+          padding:24px;
+          box-shadow:0 24px 70px rgba(0,0,0,.24);
+        "
+      >
+        <h3 style="margin:0 0 20px;">
+          ${escapeHTML(title)}
+        </h3>
+
+        <div class="field">
+          <label>Pregunta</label>
+          <input
+            id="faq-editor-question"
+            value="${escapeHTML(question)}"
+            placeholder="Escribí la pregunta"
+          >
+        </div>
+
+        <div class="field">
+          <label>Respuesta</label>
+          <textarea
+            id="faq-editor-answer"
+            rows="5"
+            placeholder="Escribí la respuesta"
+          >${escapeHTML(answer)}</textarea>
+        </div>
+
+        <div
+          class="btnrow"
+          style="
+            justify-content:flex-end;
+            margin-top:20px;
+          "
+        >
+          <button
+            type="button"
+            class="mini-btn"
+            id="faq-editor-cancel"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            class="mini-btn ok"
+            id="faq-editor-save"
+          >
+            Guardar
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const questionInput =
+      document.getElementById(
+        'faq-editor-question'
+      );
+
+    const answerInput =
+      document.getElementById(
+        'faq-editor-answer'
+      );
+
+    const close = value=>{
+      document.removeEventListener(
+        'keydown',
+        onKeyDown
+      );
+      overlay.remove();
+      resolve(value);
+    };
+
+    const onKeyDown = event=>{
+      if(event.key === 'Escape'){
+        close(null);
+      }
+    };
+
+    document.addEventListener(
+      'keydown',
+      onKeyDown
+    );
+
+    document
+      .getElementById(
+        'faq-editor-cancel'
+      )
+      .onclick = ()=>close(null);
+
+    document
+      .getElementById(
+        'faq-editor-save'
+      )
+      .onclick = ()=>{
+        const newQuestion =
+          questionInput.value.trim();
+        const newAnswer =
+          answerInput.value.trim();
+
+        if(!newQuestion || !newAnswer){
+          alert(
+            'Completá la pregunta y la respuesta.'
+          );
+          return;
+        }
+
+        close({
+          question:newQuestion,
+          answer:newAnswer
+        });
+      };
+
+    overlay.addEventListener(
+      'click',
+      event=>{
+        if(event.target === overlay){
+          close(null);
+        }
+      }
+    );
+
+    setTimeout(
+      ()=>questionInput.focus(),
+      30
+    );
+  });
+}
+
+async function saveFaqItems(faqs){
+  const { error } =
+    await supabaseClient
+      .from('site_settings')
+      .update({
+        faqs,
+        updated_at:
+          new Date().toISOString()
+      })
+      .eq('id', 1);
+
+  if(error){
+    throw error;
+  }
+}
+
+async function addFaqItem(){
+  const result =
+    await openFaqEditorModal({
+      title:'Agregar pregunta frecuente'
+    });
+
+  if(!result){
+    return;
+  }
+
+  const faqs = [
+    ...(DB.settings.faqs || []),
+    {
+      id:'faq-' + Date.now(),
+      question:result.question,
+      answer:result.answer
+    }
+  ];
+
+  try{
+    await saveFaqItems(faqs);
+    await loadAdminData();
+    renderAdminSettings();
+  }catch(error){
+    showDatabaseError(
+      error,
+      'No se pudo agregar la pregunta frecuente.'
+    );
+  }
+}
+
+async function editFaqItem(id){
+  const item =
+    (DB.settings.faqs || [])
+      .find(faq=>faq.id === id);
+
+  if(!item){
+    return;
+  }
+
+  const result =
+    await openFaqEditorModal({
+      title:'Modificar pregunta frecuente',
+      question:item.question,
+      answer:item.answer
+    });
+
+  if(!result){
+    return;
+  }
+
+  const faqs =
+    (DB.settings.faqs || [])
+      .map(
+        faq=>
+          faq.id === id
+            ? {
+                ...faq,
+                question:result.question,
+                answer:result.answer
+              }
+            : faq
+      );
+
+  try{
+    await saveFaqItems(faqs);
+    await loadAdminData();
+    renderAdminSettings();
+  }catch(error){
+    showDatabaseError(
+      error,
+      'No se pudo modificar la pregunta frecuente.'
+    );
+  }
+}
+
+async function deleteFaqItem(id){
+  const item =
+    (DB.settings.faqs || [])
+      .find(faq=>faq.id === id);
+
+  if(!item){
+    return;
+  }
+
+  if(
+    !confirm(
+      '¿Querés eliminar esta pregunta frecuente?'
+    )
+  ){
+    return;
+  }
+
+  const faqs =
+    (DB.settings.faqs || [])
+      .filter(faq=>faq.id !== id);
+
+  try{
+    await saveFaqItems(faqs);
+    await loadAdminData();
+    renderAdminSettings();
+  }catch(error){
+    showDatabaseError(
+      error,
+      'No se pudo eliminar la pregunta frecuente.'
+    );
+  }
+}
+
 function renderAdminSettings(){
   const settings = DB.settings;
 
@@ -14475,120 +15202,91 @@ function renderAdminSettings(){
       'admin-main'
     )
     .innerHTML = `
-      <h2>
-        Ajustes del sitio
-      </h2>
+      <h2>Ajustes del sitio</h2>
 
       <p
         class="lede"
         style="margin-bottom:22px;"
       >
-        Esta información alimenta las
-        secciones de Contacto y
-        Preguntas frecuentes.
+        Administrá los datos de contacto
+        y las preguntas frecuentes que
+        aparecen en la página pública.
       </p>
 
       <div class="panel">
+        <h3>Datos generales</h3>
+
         <div class="field">
           <label>
             Número de WhatsApp
             (con código de país,
             sin espacios ni +)
           </label>
-
           <input
             id="set-wa"
-            value="${
-              escapeHTML(
-                settings.whatsapp
-              )
-            }"
+            value="${escapeHTML(settings.whatsapp)}"
           >
         </div>
 
         <div class="field">
-          <label>
-            Usuario de Instagram
-          </label>
-
+          <label>Usuario de Instagram</label>
           <input
             id="set-ig"
-            value="${
-              escapeHTML(
-                settings.instagram
-              )
-            }"
+            value="${escapeHTML(settings.instagram)}"
           >
         </div>
 
         <div class="field">
-          <label>
-            Zonas de cobertura
-          </label>
-
+          <label>Zonas de cobertura</label>
           <textarea
             id="set-zonas"
             rows="3"
-          >${
-            escapeHTML(
-              settings.zonas
-            )
-          }</textarea>
-        </div>
-
-        <div class="field">
-          <label>
-            Respuesta sobre auto propio
-          </label>
-
-          <textarea
-            id="set-autopropio"
-            rows="3"
-          >${
-            escapeHTML(
-              settings.autoPropio
-            )
-          }</textarea>
-        </div>
-
-        <div class="field">
-          <label>
-            Requisitos para empezar
-          </label>
-
-          <textarea
-            id="set-requisitos"
-            rows="3"
-          >${
-            escapeHTML(
-              settings.requisitos
-            )
-          }</textarea>
-        </div>
-
-        <div class="field">
-          <label>
-            Política de cancelación
-          </label>
-
-          <textarea
-            id="set-cancelacion"
-            rows="3"
-          >${
-            escapeHTML(
-              settings.cancelacion
-            )
-          }</textarea>
+          >${escapeHTML(settings.zonas)}</textarea>
         </div>
 
         <button
           class="cta-btn"
           onclick="saveSettings()"
         >
-          Guardar ajustes
+          Guardar datos generales
         </button>
 
         <div id="settings-msg"></div>
+      </div>
+
+      <div class="panel">
+        <div
+          style="
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:14px;
+            flex-wrap:wrap;
+            margin-bottom:18px;
+          "
+        >
+          <div>
+            <h3 style="margin-bottom:6px;">
+              Preguntas frecuentes
+            </h3>
+            <p class="note" style="margin:0;">
+              Podés agregar, modificar o eliminar
+              preguntas y respuestas cuando quieras.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            class="mini-btn ok"
+            onclick="addFaqItem()"
+          >
+            Agregar pregunta
+          </button>
+        </div>
+
+        <div>
+          ${adminFaqCardsHTML()}
+        </div>
       </div>
 
       <div class="demo-note">
@@ -14613,52 +15311,19 @@ async function saveSettings(){
         .update({
           whatsapp:
             document
-              .getElementById(
-                'set-wa'
-              )
+              .getElementById('set-wa')
               .value
               .trim(),
-
           instagram:
             document
-              .getElementById(
-                'set-ig'
-              )
+              .getElementById('set-ig')
               .value
               .trim(),
-
           zones:
             document
-              .getElementById(
-                'set-zonas'
-              )
+              .getElementById('set-zonas')
               .value
               .trim(),
-
-          own_car:
-            document
-              .getElementById(
-                'set-autopropio'
-              )
-              .value
-              .trim(),
-
-          requirements:
-            document
-              .getElementById(
-                'set-requisitos'
-              )
-              .value
-              .trim(),
-
-          cancellation_policy:
-            document
-              .getElementById(
-                'set-cancelacion'
-              )
-              .value
-              .trim(),
-
           updated_at:
             new Date().toISOString()
         })
@@ -14670,23 +15335,29 @@ async function saveSettings(){
 
     await loadAdminData();
 
-    messageBox.innerHTML = `
-      <div class="success-box">
-        Ajustes guardados.
-      </div>
-    `;
+    if(messageBox){
+      messageBox.innerHTML = `
+        <div class="success-box">
+          Datos generales guardados.
+        </div>
+      `;
+    }
+
+    renderContact();
+    renderFAQ();
   }catch(error){
     console.error(
       'No se pudieron guardar los ajustes:',
       error
     );
 
-    messageBox.innerHTML = `
-      <div class="error-box">
-        No se pudieron guardar
-        los ajustes.
-      </div>
-    `;
+    if(messageBox){
+      messageBox.innerHTML = `
+        <div class="error-box">
+          No se pudieron guardar los ajustes.
+        </div>
+      `;
+    }
   }
 }
 
@@ -14712,9 +15383,18 @@ async function init(){
     adminAuthed = false;
   }
 
+  ensurePublicOnePageStyles();
   renderPublicNav();
   buildPublicSections();
-  renderContact();
+
+  try{
+    await renderAllPublicSections();
+  }catch(error){
+    console.error(
+      'No se pudieron renderizar todas las secciones públicas:',
+      error
+    );
+  }
 
   const savedView =
     sessionStorage.getItem(
