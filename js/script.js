@@ -754,6 +754,9 @@ DB.promos = promosRows.map(row=>({
   title:row.title || '',
   desc:row.description || '',
   badge:row.badge || '',
+  image:row.image_url || '',
+  storagePath:
+    row.storage_path || '',
 
   price:
     row.price === null ||
@@ -1609,20 +1612,18 @@ function renderPublicNav(){
 function renderHero(){
   return `
     <section id="sec-inicio">
-      <div class="hero">
-        <div class="wrap">
-          <div>
-            <div
-              class="eyebrow"
-              style="color:var(--amber)"
-            >
+      <div class="hero hero-redesign">
+        <div class="wrap hero-redesign-wrap">
+
+          <div class="hero-copy-modern">
+            <div class="eyebrow">
               Clases de manejo en Tucumán
             </div>
 
             <h1>
-                Aprendé a conducir.
-                <em>Ganá confianza.</em>
-                Disfrutá tu libertad.
+              Aprendé a conducir.<br>
+              <em>Ganá confianza.</em><br>
+              Disfrutá tu libertad.
             </h1>
 
             <p class="sub">
@@ -1631,7 +1632,7 @@ function renderHero(){
               Con paciencia, motivación y una enseñanza personalizada.
             </p>
 
-            <div class="ctas">
+            <div class="ctas hero-actions-modern">
               <button
                 class="cta-btn"
                 onclick="goPublic('reservas')"
@@ -1643,31 +1644,44 @@ function renderHero(){
                 class="cta-btn ghost"
                 onclick="goPublic('servicios')"
               >
-                Ver precios
+                Ver promociones
               </button>
             </div>
 
-            <div class="badge-row">
-              <div class="badge">
-                ${icon('heart')}
-                Manejo Defensivo
-              </div>
-
+            <div class="badge-row hero-values">
               <div class="badge">
                 ${icon('shield')}
                 Seguridad
               </div>
 
               <div class="badge">
-                ${icon('wheel')}
+                ${icon('heart')}
                 Confianza
+              </div>
+
+              <div class="badge">
+                ${icon('wheel')}
+                Manejo defensivo
               </div>
             </div>
           </div>
 
-          <div class="wheel">
-            ${wheelSVG()}
+          <div class="hero-media-modern">
+            <div class="hero-image-frame">
+              <img
+                src="./img/hero-instructora.png"
+                alt="Instructora de manejo junto a un automóvil"
+              >
+            </div>
           </div>
+
+        </div>
+
+        <div class="route-line-modern" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <b>⌖</b>
         </div>
       </div>
     </section>
@@ -1770,6 +1784,270 @@ function wheelSVG(){
    RENDER: SERVICIOS Y PROMOS
    ================================================================== */
 
+function promoArtVariant(
+  promo,
+  fallbackIndex = 0
+){
+
+  const key =
+    String(
+      promo &&
+      promo.id
+        ? promo.id
+        : fallbackIndex
+    );
+
+
+  let hash = 0;
+
+  for(
+    let index = 0;
+    index < key.length;
+    index++
+  ){
+
+    hash =
+      (
+        (
+          hash << 5
+        ) -
+        hash
+      ) +
+      key.charCodeAt(
+        index
+      );
+
+    hash |= 0;
+
+  }
+
+
+  return (
+    Math.abs(hash) % 6
+  ) + 1;
+
+}
+
+
+function promoArtworkHTML(
+  promo,
+  index = 0,
+  {
+    admin = false
+  } = {}
+){
+
+  if(
+    promo &&
+    promo.image
+  ){
+
+    return `
+      <div
+        class="
+          promotion-modern-art
+          has-real-image
+        "
+      >
+        <img
+          src="${
+            escapeHTML(
+              promo.image
+            )
+          }"
+          alt="${
+            admin
+              ? 'Imagen de la promoción'
+              : (
+                  'Promoción ' +
+                  escapeHTML(
+                    promo.title
+                  )
+                )
+          }"
+          loading="lazy"
+        >
+      </div>
+    `;
+
+  }
+
+
+  const variant =
+    promoArtVariant(
+      promo,
+      index
+    );
+
+
+  return `
+    <div
+      class="
+        promotion-modern-art
+        promo-art-variant-${variant}
+      "
+      aria-hidden="true"
+    >
+      <span>♥</span>
+      <span>♥</span>
+      <span>♥</span>
+
+      <div
+        class="promotion-road-line"
+      ></div>
+
+      <div
+        class="promotion-road-dot"
+      ></div>
+    </div>
+  `;
+
+}
+
+
+async function uploadPromoImageFile(
+  file
+){
+
+  if(!file){
+    return null;
+  }
+
+
+  const {
+    data: { user },
+    error: userError
+  } =
+    await supabaseClient
+      .auth
+      .getUser();
+
+
+  if(
+    userError ||
+    !user
+  ){
+
+    throw new Error(
+      'La sesión administrativa venció.'
+    );
+
+  }
+
+
+  const imageBlob =
+    await resizeImageFile(
+      file
+    );
+
+
+  const safeName =
+    file.name
+      .replace(
+        /\.[^/.]+$/,
+        ''
+      )
+      .replace(
+        /[^a-zA-Z0-9_-]/g,
+        '-'
+      )
+      .slice(
+        0,
+        60
+      );
+
+
+  const storagePath =
+    user.id +
+    '/' +
+    Date.now() +
+    '-promo-' +
+    (
+      safeName ||
+      'promocion'
+    ) +
+    '.jpg';
+
+
+  const {
+    error: uploadError
+  } =
+    await supabaseClient
+      .storage
+      .from('gallery')
+      .upload(
+        storagePath,
+        imageBlob,
+        {
+          contentType:
+            'image/jpeg',
+
+          cacheControl:
+            '3600',
+
+          upsert:
+            false
+        }
+      );
+
+
+  if(uploadError){
+    throw uploadError;
+  }
+
+
+  const {
+    data: publicUrlData
+  } =
+    supabaseClient
+      .storage
+      .from('gallery')
+      .getPublicUrl(
+        storagePath
+      );
+
+
+  return {
+    imageUrl:
+      publicUrlData.publicUrl,
+    storagePath
+  };
+
+}
+
+
+async function deletePromoStorageImage(
+  storagePath
+){
+
+  if(!storagePath){
+    return;
+  }
+
+
+  const {
+    error
+  } =
+    await supabaseClient
+      .storage
+      .from('gallery')
+      .remove([
+        storagePath
+      ]);
+
+
+  if(error){
+
+    console.warn(
+      'No se pudo eliminar la imagen anterior de la promoción:',
+      error
+    );
+
+  }
+
+}
+
+
 function renderServicesPublic(){
 
   const activePromos =
@@ -1778,17 +2056,14 @@ function renderServicesPublic(){
         promo=>promo.active
       );
 
-
   const container =
     document.getElementById(
       'promos-strip'
     );
 
-
   if(!container){
     return;
   }
-
 
   const whatsapp =
     DB.settings &&
@@ -1796,19 +2071,10 @@ function renderServicesPublic(){
       ? DB.settings.whatsapp
       : '';
 
-
   container.innerHTML =
     activePromos.length
-
       ? `
-
-          <div
-            class="grid3"
-            style="
-              margin-top:24px;
-            "
-          >
-
+          <div class="promotion-modern-grid">
             ${activePromos.map(
               promo=>{
 
@@ -1817,162 +2083,85 @@ function renderServicesPublic(){
                   promo.title +
                   '".';
 
-
                 return `
-
-                  <div
-                    class="card"
-                    style="
-                      display:flex;
-                      flex-direction:column;
-                      height:100%;
-                    "
-                  >
-
+                  <article class="promotion-modern-card">
                     ${
-                      promo.badge
-                        ? `
-                            <div
-                              class="eyebrow"
-                              style="
-                                margin-bottom:8px;
-                              "
-                            >
-                              ${
-                                escapeHTML(
-                                  promo.badge
-                                )
-                              }
-                            </div>
-                          `
-                        : ''
-                    }
-
-
-                    <h3>
-                      ${
-                        escapeHTML(
-                          promo.title
+                      promoArtworkHTML(
+                        promo,
+                        activePromos.indexOf(
+                          promo
                         )
+                      )
+                    }
+
+                    <div class="promotion-modern-copy">
+                      ${
+                        promo.badge
+                          ? `
+                              <div class="promo-badge-modern">
+                                ${escapeHTML(promo.badge)}
+                              </div>
+                            `
+                          : ''
                       }
-                    </h3>
 
+                      <h3>
+                        ${escapeHTML(promo.title)}
+                      </h3>
 
-                    ${
-                      promo.desc
-                        ? `
-                            <p
-                              style="
-                                flex:1 1 auto;
-                              "
-                            >
-                              ${
-                                escapeHTML(
-                                  promo.desc
-                                )
-                              }
-                            </p>
-                          `
-                        : `
-                            <p
-                              class="note"
-                              style="
-                                flex:1 1 auto;
-                              "
-                            >
-                              Consultanos para conocer
-                              todos los detalles.
-                            </p>
-                          `
-                    }
+                      <p>
+                        ${
+                          promo.desc
+                            ? escapeHTML(promo.desc)
+                            : 'Consultanos para conocer todos los detalles de esta promoción.'
+                        }
+                      </p>
 
-
-                    ${
-                      promo.price !== null &&
-                      promo.price !== undefined
-                        ? `
-                            <div
-                              style="
-                                margin-top:8px;
-                                font-family:
-                                  'Space Grotesk',
-                                  sans-serif;
-                                font-size:24px;
-                                font-weight:700;
-                                color:var(--asphalt);
-                              "
-                            >
-                              ${
-                                fmtMoney(
-                                  promo.price
-                                )
-                              }
-                            </div>
-                          `
-                        : ''
-                    }
-
+                      ${
+                        promo.price !== null &&
+                        promo.price !== undefined
+                          ? `
+                              <div class="promotion-price-modern">
+                                ${fmtMoney(promo.price)}
+                              </div>
+                            `
+                          : ''
+                      }
+                    </div>
 
                     ${
                       whatsapp
                         ? `
                             <a
-                              class="cta-btn small"
+                              class="cta-btn promotion-modern-button"
                               target="_blank"
-                              rel="
-                                noopener noreferrer
-                              "
-                              href="${
-                                waLink(
-                                  whatsapp,
-                                  message
-                                )
-                              }"
-                              style="
-                                display:inline-flex;
-                                align-items:center;
-                                justify-content:center;
-                                width:max-content;
-                                margin-top:16px;
-                                text-decoration:none;
-                              "
+                              rel="noopener noreferrer"
+                              href="${waLink(whatsapp, message)}"
                             >
                               Consultar por WhatsApp
                             </a>
                           `
                         : `
                             <button
-                              class="cta-btn small"
+                              class="cta-btn promotion-modern-button"
                               type="button"
                               disabled
-                              style="
-                                width:max-content;
-                                margin-top:16px;
-                              "
                             >
                               Consultar por WhatsApp
                             </button>
                           `
                     }
-
-                  </div>
-
+                  </article>
                 `;
-
               }
             ).join('')}
-
           </div>
-
         `
-
       : `
           <div class="empty">
-            No hay promociones activas
-            en este momento.
+            No hay promociones activas en este momento.
           </div>
         `;
-
 }
 
 /* ==================================================================
@@ -4027,86 +4216,259 @@ function toggleFaq(index){
    CONTACTO
    ================================================================== */
 
+function normalizeInstagramUsername(
+  value
+){
+
+  let username =
+    String(
+      value || ''
+    )
+      .trim();
+
+
+  username =
+    username
+      .replace(
+        /^https?:\/\/(www\.)?instagram\.com\//i,
+        ''
+      )
+      .replace(
+        /^@+/,
+        ''
+      )
+      .replace(
+        /\/.*$/,
+        ''
+      )
+      .trim();
+
+
+  return username;
+
+}
+
+
 function renderContact(){
-  const settings = DB.settings;
+
+  const settings =
+    DB.settings;
 
   const hasWhatsApp =
-    Boolean(settings.whatsapp);
+    Boolean(
+      settings.whatsapp
+    );
+
+  const instagramUsername =
+    normalizeInstagramUsername(
+      settings.instagram
+    );
 
   const contactLinks =
     document.getElementById(
       'contact-links'
     );
 
+
   if(contactLinks){
+
     contactLinks.innerHTML = `
+
       ${
         hasWhatsApp
           ? `
-            <a
-              href="${
-                waLink(
-                  settings.whatsapp,
-                  'Hola! Quiero consultar por clases de manejo.'
-                )
-              }"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              ${icon('shield')}
-              WhatsApp: escribinos directo
-            </a>
-          `
+              <a
+                class="
+                  public-contact-card
+                  public-contact-whatsapp
+                "
+                href="${
+                  waLink(
+                    settings.whatsapp,
+                    'Hola! Quiero consultar por clases de manejo.'
+                  )
+                }"
+                target="_blank"
+                rel="
+                  noopener noreferrer
+                "
+                aria-label="
+                  Consultar por WhatsApp
+                "
+              >
+
+                <span
+                  class="
+                    public-contact-icon
+                    public-contact-icon-whatsapp
+                  "
+                  aria-hidden="true"
+                >
+                  W
+                </span>
+
+                <span
+                  class="
+                    public-contact-copy
+                  "
+                >
+                  <strong>
+                    WhatsApp
+                  </strong>
+
+                  <span>
+                    Coordinemos tu clase
+                  </span>
+                </span>
+
+                <b
+                  class="
+                    public-contact-arrow
+                  "
+                  aria-hidden="true"
+                >
+                  →
+                </b>
+
+              </a>
+            `
           : ''
       }
 
+
       ${
-        settings.instagram
+        instagramUsername
           ? `
-            <a
-              href="
-                https://instagram.com/
-                ${settings.instagram}
-              "
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              ${icon('heart')}
-              Instagram
-              @${escapeHTML(
-                settings.instagram
-              )}
-            </a>
-          `
+              <a
+                class="
+                  public-contact-card
+                  public-contact-instagram
+                "
+                href="${
+                  'https://instagram.com/' +
+                  encodeURIComponent(
+                    instagramUsername
+                  )
+                }"
+                target="_blank"
+                rel="
+                  noopener noreferrer
+                "
+                aria-label="
+                  Abrir Instagram
+                  @${escapeHTML(
+                    instagramUsername
+                  )}
+                "
+              >
+
+                <span
+                  class="
+                    public-contact-icon
+                    public-contact-icon-instagram
+                  "
+                  aria-hidden="true"
+                >
+                  ◎
+                </span>
+
+                <span
+                  class="
+                    public-contact-copy
+                  "
+                >
+                  <strong>
+                    Instagram
+                  </strong>
+
+                  <span>
+                    @${escapeHTML(
+                      instagramUsername
+                    )}
+                  </span>
+                </span>
+
+                <b
+                  class="
+                    public-contact-arrow
+                  "
+                  aria-hidden="true"
+                >
+                  →
+                </b>
+
+              </a>
+            `
           : ''
       }
+
     `;
+
   }
+
 
   const whatsAppButton =
     document.getElementById(
       'wa-float-btn'
     );
 
-  if(!whatsAppButton){
-    return;
-  }
+  const mobileWhatsAppButton =
+    document.getElementById(
+      'mobile-wa-btn'
+    );
+
 
   if(hasWhatsApp){
-    whatsAppButton
-      .classList
-      .remove('hidden');
 
-    whatsAppButton.href =
+    const contactHref =
       waLink(
         settings.whatsapp,
         'Hola! Quiero consultar por clases de manejo.'
       );
-  }else{
+
+
+    if(mobileWhatsAppButton){
+      mobileWhatsAppButton.href =
+        contactHref;
+    }
+
+
+    if(!whatsAppButton){
+      return;
+    }
+
+
     whatsAppButton
       .classList
-      .add('hidden');
+      .remove(
+        'hidden'
+      );
+
+
+    whatsAppButton.href =
+      contactHref;
+
+
+  }else{
+
+    if(mobileWhatsAppButton){
+      mobileWhatsAppButton.href =
+        '#';
+    }
+
+
+    if(whatsAppButton){
+
+      whatsAppButton
+        .classList
+        .add(
+          'hidden'
+        );
+
+    }
+
   }
+
 }
 
 async function submitContact(event){
@@ -4208,21 +4570,23 @@ function buildPublicSections(){
 
       <section
         id="sec-servicios"
+        class="public-section promotion-section-modern"
       >
-        <div class="wrap">
-          <div class="eyebrow">
-            Promociones
+        <div class="wrap public-section-inner">
+          <div class="section-intro-modern compact">
+            <div class="eyebrow">
+              Promociones
+            </div>
+
+            <h2 class="title">
+              Una oportunidad para empezar
+            </h2>
+
+            <p class="lede">
+              Conocé las promociones vigentes y consultá por WhatsApp
+              la opción que más te interese.
+            </p>
           </div>
-
-          <h2 class="title">
-            Promociones disponibles
-          </h2>
-
-          <p class="lede">
-            Conocé las promociones vigentes
-            y consultá directamente por
-            WhatsApp la que te interese.
-          </p>
 
           <div
             class="promos-strip"
@@ -4233,26 +4597,31 @@ function buildPublicSections(){
 
       <section
         id="sec-reservas"
-        style="
-          background:var(--cream-dim);
-        "
+        class="public-section booking-section-modern"
       >
-        <div class="wrap">
-          <div class="eyebrow">
-            Reservas
+        <div class="wrap public-section-inner">
+          <div class="section-intro-modern centered">
+            <div class="eyebrow">
+              Reservas
+            </div>
+
+            <h2 class="title">
+              Elegí tu turno
+            </h2>
+
+            <p class="lede">
+              Seleccioná una fecha, elegí un horario y completá tus datos.
+              Después coordinamos la confirmación por WhatsApp.
+            </p>
           </div>
 
-          <h2 class="title">
-            Elegí tu turno
-          </h2>
+          <ol class="booking-steps-modern" aria-label="Pasos para reservar">
+            <li><span>1</span>Fecha</li>
+            <li><span>2</span>Horario</li>
+            <li><span>3</span>Tus datos</li>
+          </ol>
 
-          <p class="lede">
-            Mirá los días y horarios libres
-            y solicitá tu clase.
-            Te confirmamos por WhatsApp.
-          </p>
-
-          <div class="booking-grid">
+          <div class="booking-grid booking-grid-modern">
             <div
               class="cal"
               id="cal-public"
@@ -4268,25 +4637,26 @@ function buildPublicSections(){
 
       <section
         id="sec-galeria"
+        class="public-section gallery-section-modern"
       >
-        <div class="wrap">
-          <div class="eyebrow">
-            Egresadas
+        <div class="wrap public-section-inner">
+          <div class="section-intro-modern">
+            <div class="eyebrow">
+              Egresadas
+            </div>
+
+            <h2 class="title">
+              Alumnas que ya ganaron confianza al volante
+            </h2>
+
+            <p class="lede">
+              Historias de alumnas que completaron su proceso y hoy
+              manejan con más seguridad y autonomía.
+            </p>
           </div>
 
-          <h2 class="title">
-            Alumnas que ya se sacaron
-            su licencia
-          </h2>
-
-          <p class="lede">
-            Un poco de orgullo compartido:
-            alumnas que terminaron el curso
-            y ya manejan solas.
-          </p>
-
           <div
-            class="gallery-grid"
+            class="gallery-grid gallery-grid-modern"
             id="gallery-grid"
           ></div>
         </div>
@@ -4294,200 +4664,175 @@ function buildPublicSections(){
 
       <section
         id="sec-resenas"
+        class="public-section reviews-section-modern"
       >
-        <div class="wrap">
-          <div class="eyebrow">
-            Reseñas
+        <div class="wrap public-section-inner">
+          <div class="section-intro-modern centered">
+            <div class="eyebrow">
+              Experiencias reales
+            </div>
+
+            <h2 class="title">
+              Lo que dicen las alumnas
+            </h2>
           </div>
 
-          <h2 class="title">
-            Lo que dicen las alumnas
-          </h2>
-
           <div
-            class="reviews-track"
+            class="reviews-track reviews-grid-modern"
             id="reviews-track"
           ></div>
 
-          <div
-            class="panel"
-            style="
-              margin-top:30px;
-              max-width:520px;
-            "
-          >
-            <h3>
-              Dejá tu opinión
-            </h3>
+          <div class="review-form-modern">
+            <div class="panel">
+              <h3>
+                Dejá tu opinión
+              </h3>
 
-            <form
-              onsubmit="
-                return submitReview(event)
-              "
-            >
-              <div class="field">
-                <label>
-                  Tu nombre
-                </label>
-
-                <input
-                  required
-                  id="rv-name"
-                >
-              </div>
-
-              <div class="field">
-                <label>
-                  Puntaje
-                </label>
-
-                <select id="rv-rating">
-                  <option value="5">
-                    ★★★★★ Excelente
-                  </option>
-
-                  <option value="4">
-                    ★★★★☆ Muy bueno
-                  </option>
-
-                  <option value="3">
-                    ★★★☆☆ Bueno
-                  </option>
-
-                  <option value="2">
-                    ★★☆☆☆ Regular
-                  </option>
-
-                  <option value="1">
-                    ★☆☆☆☆ Malo
-                  </option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label>
-                  Comentario
-                </label>
-
-                <textarea
-                  required
-                  id="rv-comment"
-                  rows="3"
-                ></textarea>
-              </div>
-
-              <button
-                class="cta-btn"
-                type="submit"
+              <form
+                onsubmit="return submitReview(event)"
               >
-                Enviar opinión
-              </button>
+                <div class="field">
+                  <label>Tu nombre</label>
+                  <input required id="rv-name">
+                </div>
 
-              <div
-                id="review-form-msg"
-              ></div>
-            </form>
+                <div class="field">
+                  <label>Puntaje</label>
+                  <select id="rv-rating">
+                    <option value="5">★★★★★ Excelente</option>
+                    <option value="4">★★★★☆ Muy bueno</option>
+                    <option value="3">★★★☆☆ Bueno</option>
+                    <option value="2">★★☆☆☆ Regular</option>
+                    <option value="1">★☆☆☆☆ Malo</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label>Comentario</label>
+                  <textarea required id="rv-comment" rows="3"></textarea>
+                </div>
+
+                <button class="cta-btn" type="submit">
+                  Enviar opinión
+                </button>
+
+                <div id="review-form-msg"></div>
+              </form>
+            </div>
           </div>
         </div>
       </section>
 
       <section
         id="sec-faq"
-        style="
-          background:var(--cream-dim);
-        "
+        class="public-section faq-section-modern"
       >
-        <div
-          class="wrap"
-          style="max-width:760px;"
-        >
-          <div class="eyebrow">
-            Información útil
+        <div class="wrap public-section-inner faq-layout-modern">
+          <div class="section-intro-modern faq-intro-modern">
+            <div class="eyebrow">
+              Información útil
+            </div>
+
+            <h2 class="title">
+              Preguntas frecuentes
+            </h2>
+
+            <p class="lede">
+              Todo lo que necesitás saber antes de comenzar tus clases.
+            </p>
+
+            <div class="faq-route-modern" aria-hidden="true">⌖</div>
           </div>
 
-          <h2 class="title">
-            Preguntas frecuentes
-          </h2>
-
-          <div id="faq-list"></div>
+          <div class="faq-accordion-modern">
+            <div id="faq-list"></div>
+          </div>
         </div>
       </section>
 
       <section
         id="sec-contacto"
+        class="public-section contact-section-modern"
       >
-        <div class="wrap">
-          <div class="eyebrow">
-            Contacto
-          </div>
+        <div class="wrap public-section-inner contact-layout-modern">
+          <div class="contact-copy-modern">
+            <div class="eyebrow">
+              Contacto
+            </div>
 
-          <h2 class="title">
-            Hablemos
-          </h2>
+            <h2 class="title">
+              Hablemos
+            </h2>
 
-          <div class="contact-grid">
+            <p class="lede">
+              Escribime por tu canal favorito o dejame tus datos y te respondo
+              a la brevedad.
+            </p>
+
             <div
               class="contact-links"
               id="contact-links"
             ></div>
-
-            <div class="panel">
-              <h3>
-                Formulario de consultas
-              </h3>
-
-              <form
-                onsubmit="
-                  return submitContact(event)
-                "
-              >
-                <div class="field">
-                  <label>
-                    Nombre
-                  </label>
-
-                  <input
-                    required
-                    id="ct-name"
-                  >
-                </div>
-
-                <div class="field">
-                  <label>
-                    Teléfono o Instagram
-                  </label>
-
-                  <input
-                    required
-                    id="ct-contact"
-                  >
-                </div>
-
-                <div class="field">
-                  <label>
-                    Consulta
-                  </label>
-
-                  <textarea
-                    required
-                    id="ct-message"
-                    rows="4"
-                  ></textarea>
-                </div>
-
-                <button
-                  class="cta-btn"
-                  type="submit"
-                >
-                  Enviar consulta
-                </button>
-
-                <div
-                  id="contact-form-msg"
-                ></div>
-              </form>
-            </div>
           </div>
+
+          <div class="panel contact-form-modern">
+            <h3>
+              Formulario de consultas
+            </h3>
+
+            <form
+              onsubmit="return submitContact(event)"
+            >
+              <div class="contact-form-row-modern">
+                <div class="field">
+                  <label>Nombre</label>
+                  <input required id="ct-name" placeholder="Tu nombre">
+                </div>
+
+                <div class="field">
+                  <label>Teléfono o Instagram</label>
+                  <input required id="ct-contact" placeholder="Tu contacto">
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Consulta</label>
+                <textarea
+                  required
+                  id="ct-message"
+                  rows="5"
+                  placeholder="Contame cómo puedo ayudarte"
+                ></textarea>
+              </div>
+
+              <button class="cta-btn" type="submit">
+                Enviar consulta
+              </button>
+
+              <div id="contact-form-msg"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section class="final-public-cta">
+        <div class="wrap final-public-cta-inner">
+          <span class="steering-cta-mark" aria-hidden="true">
+            ${wheelSVG()}
+          </span>
+
+          <div>
+            <h2>¿Lista para empezar?</h2>
+            <p>El primer paso es animarte. Yo te acompaño.</p>
+          </div>
+
+          <button
+            class="cta-btn"
+            type="button"
+            onclick="goPublic('reservas')"
+          >
+            Reservar mi clase →
+          </button>
         </div>
       </section>
     `;
@@ -4609,7 +4954,22 @@ async function openAdmin(){
   }
 }
 
-function closeAdmin(){
+async function refreshPublicAfterAdmin(){
+
+  try{
+    await loadDB();
+    await renderAllPublicSections();
+    renderPublicNav();
+  }catch(error){
+    console.error(
+      'No se pudo actualizar el sitio público después del panel:',
+      error
+    );
+  }
+
+}
+
+async function closeAdmin(){
   closeAdminSidebar();
   saveCurrentView('public');
 
@@ -4626,6 +4986,8 @@ function closeAdmin(){
     )
     .classList
     .remove('hidden');
+
+  await refreshPublicAfterAdmin();
 }
 
 function showAdminLogin(){
@@ -4876,6 +5238,7 @@ async function logoutAdmin(){
     .remove('hidden');
 
   showAdminLogin();
+  await refreshPublicAfterAdmin();
 }
 
 function showAdminDashboard(){
@@ -4946,6 +5309,32 @@ const ADMIN_TABS = [
 
 let currentAdminTab =
   'dashboard';
+
+function adminTabLabel(id){
+  const tab =
+    ADMIN_TABS.find(
+      item=>item.id === id
+    );
+
+  return tab
+    ? tab.label
+    : 'Panel de control';
+}
+
+function updateAdminTopbar(){
+  const title =
+    document.getElementById(
+      'admin-top-title'
+    );
+
+  if(title){
+    title.textContent =
+      'Panel administrador · ' +
+      adminTabLabel(
+        currentAdminTab
+      );
+  }
+}
 
 function ensureAdminSidebarUI(){
 
@@ -5527,6 +5916,7 @@ function toggleAdminSidebar(){
 function renderAdminNav(){
 
   ensureAdminSidebarUI();
+  updateAdminTopbar();
 
   const nav =
     document.getElementById(
@@ -5547,7 +5937,11 @@ function renderAdminNav(){
         </div>
 
         <div class="admin-sidebar-subtitle">
-          Elegí una sección
+          ${escapeHTML(
+            adminTabLabel(
+              currentAdminTab
+            )
+          )}
         </div>
       </div>
 
@@ -5620,25 +6014,39 @@ function renderAdminNav(){
 }
 
 async function goAdmin(id){
-  currentAdminTab = id;
+
+  const safeId =
+    ADMIN_TABS.some(
+      tab=>tab.id === id
+    )
+      ? id
+      : 'dashboard';
+
+  currentAdminTab = safeId;
 
   sessionStorage.setItem(
     NAV_STATE_KEYS.adminTab,
-    id
+    safeId
   );
 
   saveCurrentView('admin');
 
   renderAdminNav();
   closeAdminSidebar();
+  updateAdminTopbar();
 
   const main =
     document.getElementById(
       'admin-main'
     );
 
+  if(!main){
+    return;
+  }
+
   main.innerHTML = `
-    <div class="empty">
+    <div class="admin-loading-card">
+      <span class="admin-loading-dot"></span>
       Cargando información…
     </div>
   `;
@@ -5681,7 +6089,17 @@ async function goAdmin(id){
         renderAdminSettings
     };
 
-    functions[id]();
+    const renderFunction =
+      functions[safeId] ||
+      renderAdminDashboard;
+
+    renderFunction();
+
+    window.scrollTo({
+      top:0,
+      behavior:'smooth'
+    });
+
   }catch(error){
     console.error(
       'No se pudo cargar el panel:',
@@ -5689,10 +6107,20 @@ async function goAdmin(id){
     );
 
     main.innerHTML = `
-      <div class="error-box">
-        No se pudo cargar la información
-        del panel. Revisá la conexión e
-        intentá nuevamente.
+      <div class="admin-error-state">
+        <strong>
+          No se pudo cargar esta sección.
+        </strong>
+        <span>
+          Revisá la conexión e intentá nuevamente.
+        </span>
+        <button
+          type="button"
+          class="mini-btn"
+          onclick="goAdmin('${safeId}')"
+        >
+          Reintentar
+        </button>
       </div>
     `;
   }
@@ -5716,11 +6144,12 @@ function renderAdminDashboard(){
     toISO(inSevenDays);
 
   const confirmed =
-    DB.bookings.filter(
-      booking=>
-        booking.status ===
-        'confirmed'
-    );
+    (DB.bookings || [])
+      .filter(
+        booking=>
+          booking.status ===
+          'confirmed'
+      );
 
   const classesToday =
     confirmed.filter(
@@ -5736,56 +6165,57 @@ function renderAdminDashboard(){
           inSevenDaysIso
     ).length;
 
+  const pendingBookings =
+    (DB.bookings || [])
+      .filter(
+        booking=>
+          booking.status ===
+          'pending'
+      );
+
   const pending =
-    DB.bookings.filter(
-      booking=>
-        booking.status ===
-        'pending'
-    ).length;
+    pendingBookings.length;
 
   const thisMonth =
-  today.slice(0, 7);
+    today.slice(0, 7);
 
+  const income =
+    (DB.payments || [])
+      .filter(payment=>
+        payment.date &&
+        payment.date.slice(0, 7) ===
+          thisMonth
+      )
+      .reduce(
+        (total, payment)=>
+          total + payment.amount,
+        0
+      );
 
-/*
-  Dinero realmente cobrado
-  durante el mes actual.
-*/
-const income =
-  (DB.payments || [])
-    .filter(payment=>
-      payment.date &&
-      payment.date.slice(0, 7) ===
-        thisMonth
-    )
-    .reduce(
-      (total, payment)=>
-        total + payment.amount,
-      0
-    );
-
-
-/*
-  Total que todavía queda
-  pendiente de cobro.
-*/
-const pendingToCollect =
-  (DB.paymentDues || [])
-    .filter(item=>
-      item.status === 'pending'
-    )
-    .reduce(
-      (total, item)=>
-        total + item.amount,
-      0
-    );
+  const pendingToCollect =
+    (DB.paymentDues || [])
+      .filter(item=>
+        item.status === 'pending'
+      )
+      .reduce(
+        (total, item)=>
+          total + item.amount,
+        0
+      );
 
   const pendingReviews =
-    DB.reviews.filter(
-      review=>
-        review.status ===
-        'pending'
-    ).length;
+    (DB.reviews || [])
+      .filter(
+        review=>
+          review.status ===
+          'pending'
+      ).length;
+
+  const unreadMessages =
+    (DB.messages || [])
+      .filter(
+        message=>!message.read
+      ).length;
 
   const tomorrow =
     new Date();
@@ -5798,10 +6228,60 @@ const pendingToCollect =
     toISO(tomorrow);
 
   const remindersList =
-    confirmed.filter(
-      booking=>
-        booking.date ===
-        tomorrowIso
+    confirmed
+      .filter(
+        booking=>
+          booking.date ===
+          tomorrowIso
+      )
+      .sort(
+        (a,b)=>
+          bookingEffectiveTime(a)
+            .localeCompare(
+              bookingEffectiveTime(b)
+            )
+      );
+
+  const upcomingClasses =
+    confirmed
+      .filter(
+        booking=>
+          booking.date >= today
+      )
+      .sort((a,b)=>{
+        const dateCompare =
+          String(a.date || '')
+            .localeCompare(
+              String(b.date || '')
+            );
+
+        if(dateCompare !== 0){
+          return dateCompare;
+        }
+
+        return (
+          bookingEffectiveTime(a) ||
+          '99:99'
+        ).localeCompare(
+          bookingEffectiveTime(b) ||
+          '99:99'
+        );
+      })
+      .slice(0, 6);
+
+  const todayDate =
+    new Date(
+      today + 'T12:00:00'
+    );
+
+  const dateLabel =
+    todayDate.toLocaleDateString(
+      'es-AR',
+      {
+        weekday:'long',
+        day:'numeric',
+        month:'long'
+      }
     );
 
   document
@@ -5809,222 +6289,400 @@ const pendingToCollect =
       'admin-main'
     )
     .innerHTML = `
-      <h2>
-        Panel de control
-      </h2>
 
-      <p
-        class="lede"
-        style="margin-bottom:22px;"
-      >
-        Un vistazo rápido a cómo
-        viene el negocio.
-      </p>
+      <div class="admin-dashboard-heading">
+        <div>
+          <div class="admin-dashboard-kicker">
+            Resumen de hoy
+          </div>
+
+          <h2>
+            Panel de control
+          </h2>
+
+          <p class="admin-dashboard-date">
+            ${escapeHTML(dateLabel)}
+          </p>
+        </div>
+
+        <div class="admin-status-chip">
+          <span></span>
+          Sistema conectado
+        </div>
+      </div>
 
       ${
         !DB.settings.whatsapp
           ? `
-            <div class="demo-note">
-              Todavía no cargaste tu
-              número de WhatsApp real.
-              Andá a
-              <b>Ajustes del sitio</b>
-              para cargarlo.
-            </div>
-          `
+              <div class="admin-dashboard-alert">
+                <strong>
+                  Falta configurar WhatsApp.
+                </strong>
+                <span>
+                  Cargalo en Ajustes del sitio para habilitar los accesos directos.
+                </span>
+                <button
+                  type="button"
+                  onclick="goAdmin('ajustes')"
+                >
+                  Ir a ajustes
+                </button>
+              </div>
+            `
           : ''
       }
 
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="num">
-            ${classesToday}
-          </div>
+      <div class="admin-stat-grid-modern">
 
-          <div class="lbl">
-            Clases hoy
-          </div>
-        </div>
+        <button
+          type="button"
+          class="admin-stat-modern"
+          onclick="goAdmin('agenda')"
+        >
+          <span class="admin-stat-icon">HOY</span>
+          <strong>${classesToday}</strong>
+          <small>Clases hoy</small>
+          <b>Ver agenda →</b>
+        </button>
 
-        <div class="stat-card">
-          <div class="num">
-            ${classesWeek}
-          </div>
+        <button
+          type="button"
+          class="admin-stat-modern"
+          onclick="goAdmin('agenda')"
+        >
+          <span class="admin-stat-icon">7D</span>
+          <strong>${classesWeek}</strong>
+          <small>Clases próximos 7 días</small>
+          <b>Ver agenda →</b>
+        </button>
 
-          <div class="lbl">
-            Clases esta semana
-          </div>
-        </div>
+        <button
+          type="button"
+          class="admin-stat-modern ${pending ? 'attention' : ''}"
+          onclick="goAdmin('agenda')"
+        >
+          <span class="admin-stat-icon">SOL</span>
+          <strong>${pending}</strong>
+          <small>Solicitudes pendientes</small>
+          <b>Revisar →</b>
+        </button>
 
-        <div class="stat-card">
-          <div class="num">
-            ${pending}
-          </div>
+        <button
+          type="button"
+          class="admin-stat-modern money"
+          onclick="goAdmin('pagos')"
+        >
+          <span class="admin-stat-icon">$</span>
+          <strong>${fmtMoney(income)}</strong>
+          <small>Cobrado este mes</small>
+          <b>Ver pagos →</b>
+        </button>
 
-          <div class="lbl">
-            Solicitudes pendientes
-          </div>
-        </div>
+        <button
+          type="button"
+          class="admin-stat-modern money ${pendingToCollect ? 'attention' : ''}"
+          onclick="goAdmin('pagos')"
+        >
+          <span class="admin-stat-icon">PEN</span>
+          <strong>${fmtMoney(pendingToCollect)}</strong>
+          <small>Pendiente de cobro</small>
+          <b>Ver saldos →</b>
+        </button>
 
-        <div class="stat-card">
-
-  <div class="num">
-    ${fmtMoney(income)}
-  </div>
-
-  <div class="lbl">
-    Ingresos cobrados este mes
-  </div>
-
-</div>
-
-
-<div class="stat-card">
-
-  <div class="num">
-    ${fmtMoney(pendingToCollect)}
-  </div>
-
-  <div class="lbl">
-    Pendiente de cobro
-  </div>
-
-</div>
       </div>
 
-      <div class="panel">
-        <h3>
-          Recordatorios —
-          clases de mañana
-          (${fmtDateHuman(
-            tomorrowIso
-          )})
-        </h3>
+      <div class="admin-quick-panel">
+        <div class="admin-panel-title-row">
+          <div>
+            <span class="admin-section-kicker">
+              Accesos rápidos
+            </span>
+            <h3>¿Qué necesitás hacer?</h3>
+          </div>
+        </div>
+
+        <div class="admin-quick-grid">
+          <button type="button" onclick="goAdmin('agenda')">
+            <strong>Agenda</strong>
+            <span>Clases y solicitudes</span>
+          </button>
+
+          <button type="button" onclick="goAdmin('alumnas')">
+            <strong>Alumnas</strong>
+            <span>Fichas y observaciones</span>
+          </button>
+
+          <button type="button" onclick="goAdmin('pagos')">
+            <strong>Pagos</strong>
+            <span>Cobros y pendientes</span>
+          </button>
+
+          <button type="button" onclick="goAdmin('precios')">
+            <strong>Promociones</strong>
+            <span>Contenido público</span>
+          </button>
+
+          <button type="button" onclick="goAdmin('mensajes')">
+            <strong>Mensajes</strong>
+            <span>${unreadMessages} sin leer</span>
+          </button>
+
+          <button type="button" onclick="goAdmin('ajustes')">
+            <strong>Ajustes</strong>
+            <span>Contacto y preguntas</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="admin-dashboard-columns">
+
+        <section class="admin-dashboard-card">
+          <div class="admin-panel-title-row">
+            <div>
+              <span class="admin-section-kicker">
+                Próximas clases
+              </span>
+              <h3>Agenda próxima</h3>
+            </div>
+
+            <button
+              type="button"
+              class="admin-text-action"
+              onclick="goAdmin('agenda')"
+            >
+              Ver agenda
+            </button>
+          </div>
+
+          ${
+            upcomingClasses.length
+              ? `
+                  <div class="admin-upcoming-list">
+                    ${upcomingClasses.map(booking=>{
+                      const phone =
+                        bookingCurrentPhone(
+                          booking
+                        );
+
+                      const address =
+                        bookingCurrentAddress(
+                          booking
+                        );
+
+                      const time =
+                        bookingEffectiveTime(
+                          booking
+                        ) || '—';
+
+                      return `
+                        <article class="admin-upcoming-item">
+                          <div class="admin-upcoming-date">
+                            <strong>
+                              ${formatAgendaShortDate(booking.date)}
+                            </strong>
+                            <span>${time}</span>
+                          </div>
+
+                          <div class="admin-upcoming-copy">
+                            <strong>
+                              ${escapeHTML(booking.name)}
+                            </strong>
+                            <span>
+                              ${escapeHTML(
+                                labelFor(
+                                  booking.service,
+                                  booking.serviceName
+                                )
+                              )}
+                            </span>
+                            ${
+                              address
+                                ? `<small>${escapeHTML(address)}</small>`
+                                : ''
+                            }
+                          </div>
+
+                          ${
+                            phone
+                              ? `
+                                  <a
+                                    class="admin-icon-action"
+                                    href="${waLink(
+                                      phone,
+                                      bookingWhatsAppText(booking)
+                                    )}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    WhatsApp
+                                  </a>
+                                `
+                              : ''
+                          }
+                        </article>
+                      `;
+                    }).join('')}
+                  </div>
+                `
+              : `
+                  <div class="admin-empty-modern">
+                    No hay clases confirmadas próximas.
+                  </div>
+                `
+          }
+        </section>
+
+        <section class="admin-dashboard-card">
+          <div class="admin-panel-title-row">
+            <div>
+              <span class="admin-section-kicker">
+                Pendientes
+              </span>
+              <h3>Necesitan atención</h3>
+            </div>
+          </div>
+
+          <div class="admin-pending-list">
+            <button
+              type="button"
+              onclick="goAdmin('agenda')"
+            >
+              <span>Solicitudes de turno</span>
+              <strong>${pending}</strong>
+            </button>
+
+            <button
+              type="button"
+              onclick="goAdmin('resenas')"
+            >
+              <span>Reseñas por moderar</span>
+              <strong>${pendingReviews}</strong>
+            </button>
+
+            <button
+              type="button"
+              onclick="goAdmin('mensajes')"
+            >
+              <span>Mensajes sin leer</span>
+              <strong>${unreadMessages}</strong>
+            </button>
+          </div>
+
+          ${
+            pendingBookings.length
+              ? `
+                  <div class="admin-dashboard-divider"></div>
+                  <span class="admin-section-kicker">
+                    Últimas solicitudes
+                  </span>
+                  <div class="admin-request-preview">
+                    ${pendingBookings
+                      .slice()
+                      .sort((a,b)=>
+                        String(a.createdAt || '')
+                          .localeCompare(
+                            String(b.createdAt || '')
+                          ) * -1
+                      )
+                      .slice(0, 4)
+                      .map(booking=>`
+                        <div>
+                          <span>
+                            ${escapeHTML(booking.name)}
+                          </span>
+                          <strong>
+                            ${formatAgendaShortDate(booking.date)}
+                            ·
+                            ${bookingEffectiveTime(booking) || 'Sin hora'}
+                          </strong>
+                        </div>
+                      `)
+                      .join('')}
+                  </div>
+                `
+              : ''
+          }
+        </section>
+
+      </div>
+
+      <section class="admin-dashboard-card admin-reminder-card">
+        <div class="admin-panel-title-row">
+          <div>
+            <span class="admin-section-kicker">
+              Recordatorios
+            </span>
+            <h3>
+              Clases de mañana · ${fmtDateHuman(tomorrowIso)}
+            </h3>
+          </div>
+        </div>
 
         ${
           remindersList.length
             ? `
-              <div class="table-scroll reminders-scroll">
-                  <table class="admin-table reminders-table">
-                  <tr>
-                    <th>Alumna</th>
-                    <th>Hora</th>
-                    <th>Servicio</th>
-                    <th></th>
-                  </tr>
+                <div class="admin-reminder-grid">
+                  ${remindersList.map(booking=>{
+                    const phone =
+                      bookingCurrentPhone(
+                        booking
+                      );
 
-                  ${
-                    remindersList
-                      .map(booking=>`
-                        <tr>
-                          <td>
-                            ${
-                              escapeHTML(
-                                booking.name
-                              )
-                            }
-                          </td>
-
-                          <td class="mono">
-                            ${booking.time}
-                          </td>
-
-                          <td>
-                            ${
+                    return `
+                      <article>
+                        <div>
+                          <strong>${escapeHTML(booking.name)}</strong>
+                          <span>
+                            ${bookingEffectiveTime(booking) || '—'}
+                            ·
+                            ${escapeHTML(
                               labelFor(
                                 booking.service,
                                 booking.serviceName
                               )
-                            }
-                          </td>
+                            )}
+                          </span>
+                        </div>
 
-                          <td class="reminder-action">
-                            <a class="mini-btn wa"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              href="${
-                                waLink(
-                                  bookingCurrentPhone(
-                                    booking
-                                  ),
-                                  (
+                        ${
+                          phone
+                            ? `
+                                <a
+                                  class="mini-btn wa"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  href="${waLink(
+                                    phone,
                                     'Hola ' +
                                     booking.name +
                                     '! Te recordamos tu clase de manejo mañana ' +
-                                    fmtDateHuman(
-                                      booking.date
-                                    ) +
+                                    fmtDateHuman(booking.date) +
                                     ' a las ' +
-                                    booking.time +
+                                    (bookingEffectiveTime(booking) || '') +
                                     '. ¡Te esperamos!'
-                                  )
-                                )
-                              }"
-                            >
-                              Enviar recordatorio
-                              por WhatsApp
-                            </a>
-                          </td>
-                        </tr>
-                      `)
-                      .join('')
-                  }
-                </table>
-              </div>
-            `
+                                  )}"
+                                >
+                                  Enviar WhatsApp
+                                </a>
+                              `
+                            : `
+                                <span class="admin-no-phone">
+                                  Sin teléfono
+                                </span>
+                              `
+                        }
+                      </article>
+                    `;
+                  }).join('')}
+                </div>
+              `
             : `
-              <div class="empty">
-                No hay clases confirmadas
-                para mañana.
-              </div>
-            `
+                <div class="admin-empty-modern">
+                  No hay clases confirmadas para mañana.
+                </div>
+              `
         }
-
-        <p class="note">
-          El recordatorio abre WhatsApp
-          con el mensaje preparado.
-        </p>
-      </div>
-
-      <div class="panel">
-        <h3>
-          Otros pendientes
-        </h3>
-
-        <p style="margin:0;">
-          📝
-          ${pendingReviews}
-          reseña${
-            pendingReviews === 1
-              ? ''
-              : 's'
-          }
-          esperando moderación
-
-          · 💬
-
-          ${
-            DB.messages.filter(
-              message=>!message.read
-            ).length
-          }
-
-          mensaje${
-            DB.messages.filter(
-              message=>!message.read
-            ).length === 1
-              ? ''
-              : 's'
-          }
-          nuevo${
-            DB.messages.filter(
-              message=>!message.read
-            ).length === 1
-              ? ''
-              : 's'
-          }
-        </p>
-      </div>
+      </section>
     `;
 }
 
@@ -6313,8 +6971,14 @@ async function addWeeklyRange(
 async function removeWeeklyRange(id){
 
   if(
-    !confirm(
-      '¿Querés eliminar este rango horario?'
+    !(
+      await openAppConfirm(
+        '¿Querés eliminar este rango horario?',
+        {
+          title:'Eliminar horario',
+          confirmText:'Eliminar'
+        }
+      )
     )
   ){
     return;
@@ -7133,8 +7797,15 @@ async function removeDateOverride(id){
 async function clearDateOverrides(iso){
 
   if(
-    !confirm(
-      '¿Querés volver al horario habitual para este día?'
+    !(
+      await openAppConfirm(
+        '¿Querés volver al horario habitual para este día?',
+        {
+          title:'Restaurar horario',
+          confirmText:'Restaurar',
+          danger:false
+        }
+      )
     )
   ){
     return;
@@ -7432,6 +8103,569 @@ async function addManualClass(iso){
 
   }
 }
+
+/* ================================================================
+   MODALES GENERALES DEL SISTEMA
+   ================================================================ */
+
+function ensureSystemModalStyles(){
+
+  if(
+    document.getElementById(
+      'system-modal-styles'
+    )
+  ){
+    return;
+  }
+
+  const style =
+    document.createElement('style');
+
+  style.id =
+    'system-modal-styles';
+
+  style.textContent = `
+    .system-modal-overlay{
+      position:fixed;
+      inset:0;
+      z-index:120000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      background:rgba(8,18,34,.68);
+      backdrop-filter:blur(4px);
+      -webkit-backdrop-filter:blur(4px);
+      animation:systemModalFadeIn .16s ease-out;
+    }
+
+    .system-modal-card{
+      width:min(100%,470px);
+      max-height:calc(100dvh - 40px);
+      overflow:auto;
+      border:1px solid rgba(18,35,63,.10);
+      border-radius:20px;
+      background:var(--paper,#fff);
+      box-shadow:0 28px 80px rgba(6,17,31,.30);
+      animation:systemModalCardIn .18s ease-out;
+    }
+
+    .system-modal-top{
+      display:flex;
+      align-items:flex-start;
+      gap:14px;
+      padding:22px 22px 0;
+    }
+
+    .system-modal-icon{
+      display:grid;
+      flex:0 0 44px;
+      width:44px;
+      height:44px;
+      place-items:center;
+      border-radius:14px;
+      background:rgba(245,160,39,.15);
+      color:var(--orange-dark,#d68100);
+      font-family:'Space Grotesk',sans-serif;
+      font-size:22px;
+      font-weight:800;
+      line-height:1;
+    }
+
+    .system-modal-icon.danger{
+      background:rgba(190,63,58,.12);
+      color:#a5322e;
+    }
+
+    .system-modal-heading{
+      min-width:0;
+      flex:1 1 auto;
+    }
+
+    .system-modal-title{
+      margin:1px 0 5px;
+      color:var(--navy,#12233f);
+      font-family:'Space Grotesk',sans-serif;
+      font-size:21px;
+      font-weight:750;
+      line-height:1.18;
+    }
+
+    .system-modal-kicker{
+      color:var(--orange-dark,#d68100);
+      font-family:'Space Grotesk',sans-serif;
+      font-size:11px;
+      font-weight:750;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+
+    .system-modal-message{
+      padding:18px 22px 8px;
+      color:var(--ink-soft,#536174);
+      font-family:'Space Grotesk',sans-serif;
+      font-size:15px;
+      line-height:1.58;
+      white-space:pre-wrap;
+      overflow-wrap:anywhere;
+    }
+
+    .system-modal-actions{
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      padding:18px 22px 22px;
+      border-top:1px solid rgba(18,35,63,.08);
+      margin-top:10px;
+    }
+
+    .system-modal-btn{
+      min-height:42px;
+      padding:10px 17px;
+      border-radius:11px;
+      border:1px solid transparent;
+      font-family:'Space Grotesk',sans-serif;
+      font-size:14px;
+      font-weight:750;
+      cursor:pointer;
+      transition:
+        transform .14s ease,
+        box-shadow .14s ease,
+        background .14s ease;
+    }
+
+    .system-modal-btn:hover{
+      transform:translateY(-1px);
+    }
+
+    .system-modal-btn.cancel{
+      border-color:rgba(18,35,63,.14);
+      background:#fff;
+      color:var(--navy,#12233f);
+    }
+
+    .system-modal-btn.primary{
+      background:var(--orange,#f5a027);
+      color:var(--navy,#12233f);
+      box-shadow:0 7px 18px rgba(245,160,39,.22);
+    }
+
+    .system-modal-btn.danger{
+      background:#a83b36;
+      color:#fff;
+      box-shadow:0 7px 18px rgba(168,59,54,.20);
+    }
+
+    .system-modal-btn:focus-visible{
+      outline:3px solid rgba(245,160,39,.30);
+      outline-offset:2px;
+    }
+
+    @keyframes systemModalFadeIn{
+      from{opacity:0;}
+      to{opacity:1;}
+    }
+
+    @keyframes systemModalCardIn{
+      from{
+        opacity:0;
+        transform:translateY(8px) scale(.985);
+      }
+      to{
+        opacity:1;
+        transform:translateY(0) scale(1);
+      }
+    }
+
+    @media(max-width:560px){
+      .system-modal-overlay{
+        padding:14px;
+      }
+
+      .system-modal-card{
+        border-radius:17px;
+      }
+
+      .system-modal-top{
+        padding:19px 18px 0;
+      }
+
+      .system-modal-message{
+        padding:16px 18px 7px;
+        font-size:14px;
+      }
+
+      .system-modal-actions{
+        padding:16px 18px 18px;
+      }
+
+      .system-modal-title{
+        font-size:19px;
+      }
+
+      .system-modal-icon{
+        flex-basis:40px;
+        width:40px;
+        height:40px;
+        border-radius:12px;
+        font-size:20px;
+      }
+    }
+
+    @media(max-width:390px){
+      .system-modal-actions{
+        display:grid;
+        grid-template-columns:1fr;
+      }
+
+      .system-modal-btn{
+        width:100%;
+      }
+
+      .system-modal-btn.primary,
+      .system-modal-btn.danger{
+        order:-1;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+
+function systemModalIsDanger(message){
+
+  const text =
+    String(message || '')
+      .toLowerCase();
+
+  return (
+    text.includes('eliminar') ||
+    text.includes('quitar') ||
+    text.includes('borrar')
+  );
+}
+
+
+function closePreviousSystemModal(){
+
+  const previous =
+    document.getElementById(
+      'system-modal-overlay'
+    );
+
+  if(previous){
+    previous.remove();
+  }
+}
+
+
+function showAppAlert(
+  message,
+  {
+    title = 'Aviso',
+    buttonText = 'Aceptar'
+  } = {}
+){
+
+  ensureSystemModalStyles();
+  closePreviousSystemModal();
+
+  const overlay =
+    document.createElement('div');
+
+  overlay.id =
+    'system-modal-overlay';
+
+  overlay.className =
+    'system-modal-overlay';
+
+  overlay.setAttribute(
+    'role',
+    'alertdialog'
+  );
+
+  overlay.setAttribute(
+    'aria-modal',
+    'true'
+  );
+
+  overlay.innerHTML = `
+    <div
+      class="system-modal-card"
+      role="document"
+    >
+      <div class="system-modal-top">
+        <div
+          class="system-modal-icon"
+          aria-hidden="true"
+        >
+          i
+        </div>
+
+        <div class="system-modal-heading">
+          <div class="system-modal-kicker">
+            Escuela de Manejo
+          </div>
+
+          <h3 class="system-modal-title">
+            ${escapeHTML(title)}
+          </h3>
+        </div>
+      </div>
+
+      <div class="system-modal-message">${
+        escapeHTML(
+          String(message ?? '')
+        )
+      }</div>
+
+      <div class="system-modal-actions">
+        <button
+          type="button"
+          class="system-modal-btn primary"
+          id="system-modal-ok"
+        >
+          ${escapeHTML(buttonText)}
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(
+    overlay
+  );
+
+  const okButton =
+    document.getElementById(
+      'system-modal-ok'
+    );
+
+  const close = ()=>{
+
+    document.removeEventListener(
+      'keydown',
+      onKeyDown
+    );
+
+    if(overlay.isConnected){
+      overlay.remove();
+    }
+  };
+
+  const onKeyDown = event=>{
+
+    if(
+      event.key === 'Escape' ||
+      event.key === 'Enter'
+    ){
+      event.preventDefault();
+      close();
+    }
+  };
+
+  document.addEventListener(
+    'keydown',
+    onKeyDown
+  );
+
+  okButton.onclick =
+    close;
+
+  overlay.addEventListener(
+    'click',
+    event=>{
+      if(event.target === overlay){
+        close();
+      }
+    }
+  );
+
+  setTimeout(
+    ()=>okButton.focus(),
+    30
+  );
+}
+
+
+function openAppConfirm(
+  message,
+  {
+    title = 'Confirmar acción',
+    confirmText = 'Confirmar',
+    cancelText = 'Cancelar',
+    danger = null
+  } = {}
+){
+
+  return new Promise(resolve=>{
+
+    ensureSystemModalStyles();
+    closePreviousSystemModal();
+
+    const isDanger =
+      danger === null
+        ? systemModalIsDanger(
+            message
+          )
+        : Boolean(danger);
+
+    const overlay =
+      document.createElement('div');
+
+    overlay.id =
+      'system-modal-overlay';
+
+    overlay.className =
+      'system-modal-overlay';
+
+    overlay.setAttribute(
+      'role',
+      'dialog'
+    );
+
+    overlay.setAttribute(
+      'aria-modal',
+      'true'
+    );
+
+    overlay.innerHTML = `
+      <div
+        class="system-modal-card"
+        role="document"
+      >
+        <div class="system-modal-top">
+          <div
+            class="
+              system-modal-icon
+              ${isDanger ? 'danger' : ''}
+            "
+            aria-hidden="true"
+          >
+            ${isDanger ? '!' : '?'}
+          </div>
+
+          <div class="system-modal-heading">
+            <div class="system-modal-kicker">
+              Escuela de Manejo
+            </div>
+
+            <h3 class="system-modal-title">
+              ${escapeHTML(title)}
+            </h3>
+          </div>
+        </div>
+
+        <div class="system-modal-message">${
+          escapeHTML(
+            String(message ?? '')
+          )
+        }</div>
+
+        <div class="system-modal-actions">
+          <button
+            type="button"
+            class="system-modal-btn cancel"
+            id="system-modal-cancel"
+          >
+            ${escapeHTML(cancelText)}
+          </button>
+
+          <button
+            type="button"
+            class="
+              system-modal-btn
+              ${isDanger ? 'danger' : 'primary'}
+            "
+            id="system-modal-confirm"
+          >
+            ${escapeHTML(confirmText)}
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(
+      overlay
+    );
+
+    const cancelButton =
+      document.getElementById(
+        'system-modal-cancel'
+      );
+
+    const confirmButton =
+      document.getElementById(
+        'system-modal-confirm'
+      );
+
+    let finished = false;
+
+    const close = value=>{
+
+      if(finished){
+        return;
+      }
+
+      finished = true;
+
+      document.removeEventListener(
+        'keydown',
+        onKeyDown
+      );
+
+      if(overlay.isConnected){
+        overlay.remove();
+      }
+
+      resolve(value);
+    };
+
+    const onKeyDown = event=>{
+
+      if(event.key === 'Escape'){
+        event.preventDefault();
+        close(false);
+      }
+    };
+
+    document.addEventListener(
+      'keydown',
+      onKeyDown
+    );
+
+    cancelButton.onclick =
+      ()=>close(false);
+
+    confirmButton.onclick =
+      ()=>close(true);
+
+    overlay.addEventListener(
+      'click',
+      event=>{
+        if(event.target === overlay){
+          close(false);
+        }
+      }
+    );
+
+    setTimeout(
+      ()=>confirmButton.focus(),
+      30
+    );
+  });
+}
+
+
+/*
+  Los avisos existentes usan automáticamente
+  el modal del sistema en vez del cuadro del navegador.
+*/
+window.alert =
+  function(message){
+    showAppAlert(message);
+  };
+
 
 /* ================================================================
    MODAL GENÉRICO PARA MODIFICACIONES
@@ -9471,8 +10705,7 @@ function renderAdminStudents(){
                     id="student-search"
                     type="search"
                     placeholder="
-                      Buscar por nombre,
-                      teléfono o dirección...
+                      Buscar por nombre, teléfono o dirección...
                     "
                     value="${
                       escapeHTML(
@@ -10073,10 +11306,7 @@ function renderAdminStudents(){
                         <textarea
                           id="student-observation-${student.id}"
                           rows="3"
-                          placeholder="
-                            Ej: hoy practicó estacionamiento
-                            y necesita reforzar el uso de espejos.
-                          "
+                          placeholder=" Ej: hoy practicó estacionamiento y necesita reforzar el uso de espejos."
                         ></textarea>
 
                       </div>
@@ -11108,8 +12338,14 @@ async function deleteStudentObservation(
 
 
   if(
-    !confirm(
-      '¿Querés eliminar esta observación?'
+    !(
+      await openAppConfirm(
+        '¿Querés eliminar esta observación?',
+        {
+          title:'Eliminar observación',
+          confirmText:'Eliminar'
+        }
+      )
     )
   ){
     return;
@@ -11188,10 +12424,16 @@ async function removeStudent(id){
 
 
   if(
-    !confirm(
-      '¿Querés eliminar la ficha de ' +
-      student.name +
-      '?'
+    !(
+      await openAppConfirm(
+        '¿Querés eliminar la ficha de ' +
+        student.name +
+        '?',
+        {
+          title:'Eliminar ficha',
+          confirmText:'Eliminar'
+        }
+      )
     )
   ){
     return;
@@ -12282,7 +13524,17 @@ async function deletePayment(
         );
 
 
-  if(!confirm(message)){
+  if(
+    !(
+      await openAppConfirm(
+        message,
+        {
+          title:'Eliminar pago',
+          confirmText:'Eliminar'
+        }
+      )
+    )
+  ){
     return;
   }
 
@@ -12707,12 +13959,19 @@ async function resolvePaymentDue(
 
 
   if(
-    !confirm(
-      '¿Confirmás que ' +
-      due.studentName +
-      ' pagó ' +
-      fmtMoney(due.amount) +
-      '?\n\nEl pago se agregará automáticamente al historial.'
+    !(
+      await openAppConfirm(
+        '¿Confirmás que ' +
+        due.studentName +
+        ' pagó ' +
+        fmtMoney(due.amount) +
+        '?\n\nEl pago se agregará automáticamente al historial.',
+        {
+          title:'Confirmar pago',
+          confirmText:'Sí, registrar pago',
+          danger:false
+        }
+      )
     )
   ){
     return;
@@ -13362,8 +14621,14 @@ async function removeGalleryPhoto(id){
   }
 
   if(
-    !confirm(
-      '¿Querés eliminar esta foto de la galería?'
+    !(
+      await openAppConfirm(
+        '¿Querés eliminar esta foto de la galería?',
+        {
+          title:'Eliminar foto',
+          confirmText:'Eliminar'
+        }
+      )
     )
   ){
     return;
@@ -14018,6 +15283,87 @@ function renderAdminPricing(){
 
 
               <div
+                class="
+                  promo-admin-image-row
+                "
+              >
+
+                <div
+                  class="
+                    promo-admin-preview
+                  "
+                >
+                  ${
+                    promoArtworkHTML(
+                      p,
+                      DB.promos.indexOf(
+                        p
+                      ),
+                      {
+                        admin:true
+                      }
+                    )
+                  }
+                </div>
+
+
+                <div
+                  class="
+                    promo-admin-image-controls
+                  "
+                >
+
+                  <label
+                    for="
+                      promo-image-${p.id}
+                    "
+                  >
+                    Imagen
+                    (opcional)
+                  </label>
+
+                  <input
+                    id="
+                      promo-image-${p.id}
+                    "
+                    type="file"
+                    accept="image/*"
+                  >
+
+                  <p class="note">
+                    Si no cargás una imagen,
+                    se usa automáticamente
+                    una ilustración del diseño
+                    con un color diferente.
+                  </p>
+
+                  ${
+                    p.image
+                      ? `
+                          <button
+                            class="
+                              mini-btn
+                              no
+                            "
+                            type="button"
+                            onclick="
+                              removePromoImage(
+                                '${p.id}'
+                              )
+                            "
+                          >
+                            Quitar imagen
+                          </button>
+                        `
+                      : ''
+                  }
+
+                </div>
+
+              </div>
+
+
+              <div
                 class="btnrow"
                 style="margin-top:10px;"
               >
@@ -14127,6 +15473,29 @@ function renderAdminPricing(){
             Ej: válido hasta fin de mes
           "
         >
+
+      </div>
+
+
+      <div class="field">
+
+        <label>
+          Imagen (opcional)
+        </label>
+
+        <input
+          id="new-promo-image"
+          type="file"
+          accept="image/*"
+        >
+
+        <p class="note">
+          Si la dejás vacía,
+          la página mostrará una
+          ilustración automática
+          del mismo diseño con
+          distintos colores.
+        </p>
 
       </div>
 
@@ -14279,11 +15648,17 @@ async function removeService(id){
 
 
   if(
-    !confirm(
-      '¿Querés eliminar la clase "' +
-      service.name +
-      '"? Las reservas anteriores ' +
-      'conservarán el nombre de la clase.'
+    !(
+      await openAppConfirm(
+        '¿Querés eliminar la clase "' +
+        service.name +
+        '"? Las reservas anteriores ' +
+        'conservarán el nombre de la clase.',
+        {
+          title:'Eliminar clase',
+          confirmText:'Eliminar'
+        }
+      )
     )
   ){
     return;
@@ -14406,6 +15781,17 @@ async function addService(){
 
 async function savePromo(id){
 
+  const promo =
+    DB.promos.find(
+      item=>item.id === id
+    );
+
+
+  if(!promo){
+    return;
+  }
+
+
   const title =
     document
       .getElementById(
@@ -14425,40 +15811,80 @@ async function savePromo(id){
   }
 
 
+  const imageInput =
+    document.getElementById(
+      'promo-image-' + id
+    );
+
+
+  const newImageFile =
+    imageInput &&
+    imageInput.files
+      ? imageInput.files[0]
+      : null;
+
+
+  let uploadedImage =
+    null;
+
+
   try{
+
+    if(newImageFile){
+
+      uploadedImage =
+        await uploadPromoImageFile(
+          newImageFile
+        );
+
+    }
+
+
+    const updateData = {
+
+      title,
+
+      description:
+        document
+          .getElementById(
+            'promo-desc-' + id
+          )
+          .value
+          .trim(),
+
+      badge:
+        document
+          .getElementById(
+            'promo-badge-' + id
+          )
+          .value
+          .trim(),
+
+      price:
+        optionalPriceValue(
+          'promo-price-' + id
+        )
+
+    };
+
+
+    if(uploadedImage){
+
+      updateData.image_url =
+        uploadedImage.imageUrl;
+
+      updateData.storage_path =
+        uploadedImage.storagePath;
+
+    }
+
 
     const { error } =
       await supabaseClient
-
         .from('promos')
-
-        .update({
-
-          title,
-
-          description:
-            document
-              .getElementById(
-                'promo-desc-' + id
-              )
-              .value
-              .trim(),
-
-          badge:
-            document
-              .getElementById(
-                'promo-badge-' + id
-              )
-              .value
-              .trim(),
-
-          price:
-            optionalPriceValue(
-              'promo-price-' + id
-            )
-
-        })
-
+        .update(
+          updateData
+        )
         .eq(
           'id',
           id
@@ -14466,7 +15892,31 @@ async function savePromo(id){
 
 
     if(error){
+
+      if(
+        uploadedImage &&
+        uploadedImage.storagePath
+      ){
+
+        await deletePromoStorageImage(
+          uploadedImage.storagePath
+        );
+
+      }
+
       throw error;
+    }
+
+
+    if(
+      uploadedImage &&
+      promo.storagePath
+    ){
+
+      await deletePromoStorageImage(
+        promo.storagePath
+      );
+
     }
 
 
@@ -14483,6 +15933,85 @@ async function savePromo(id){
     );
 
   }
+}
+
+
+async function removePromoImage(
+  id
+){
+
+  const promo =
+    DB.promos.find(
+      item=>item.id === id
+    );
+
+
+  if(
+    !promo ||
+    !promo.image
+  ){
+    return;
+  }
+
+
+  if(
+    !(
+      await openAppConfirm(
+        '¿Querés quitar la imagen de esta promoción? Se usará una ilustración automática.',
+        {
+          title:'Quitar imagen',
+          confirmText:'Quitar imagen'
+        }
+      )
+    )
+  ){
+    return;
+  }
+
+
+  try{
+
+    const { error } =
+      await supabaseClient
+        .from('promos')
+        .update({
+          image_url:null,
+          storage_path:null
+        })
+        .eq(
+          'id',
+          id
+        );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    if(promo.storagePath){
+
+      await deletePromoStorageImage(
+        promo.storagePath
+      );
+
+    }
+
+
+    await loadAdminData();
+
+    renderAdminPricing();
+
+
+  }catch(error){
+
+    showDatabaseError(
+      error,
+      'No se pudo quitar la imagen de la promoción.'
+    );
+
+  }
+
 }
 
 async function togglePromo(id){
@@ -14537,9 +16066,26 @@ async function togglePromo(id){
 
 async function removePromo(id){
 
+  const promo =
+    DB.promos.find(
+      item=>item.id === id
+    );
+
+
+  if(!promo){
+    return;
+  }
+
+
   if(
-    !confirm(
-      '¿Querés eliminar esta promoción?'
+    !(
+      await openAppConfirm(
+        '¿Querés eliminar esta promoción?',
+        {
+          title:'Eliminar promoción',
+          confirmText:'Eliminar'
+        }
+      )
     )
   ){
     return;
@@ -14550,11 +16096,8 @@ async function removePromo(id){
 
     const { error } =
       await supabaseClient
-
         .from('promos')
-
         .delete()
-
         .eq(
           'id',
           id
@@ -14563,6 +16106,15 @@ async function removePromo(id){
 
     if(error){
       throw error;
+    }
+
+
+    if(promo.storagePath){
+
+      await deletePromoStorageImage(
+        promo.storagePath
+      );
+
     }
 
 
@@ -14579,9 +16131,11 @@ async function removePromo(id){
     );
 
   }
+
 }
 
 async function addPromo(){
+
   const title =
     document
       .getElementById(
@@ -14601,13 +16155,38 @@ async function addPromo(){
   }
 
 
+  const imageInput =
+    document.getElementById(
+      'new-promo-image'
+    );
+
+
+  const imageFile =
+    imageInput &&
+    imageInput.files
+      ? imageInput.files[0]
+      : null;
+
+
+  let uploadedImage =
+    null;
+
+
   try{
+
+    if(imageFile){
+
+      uploadedImage =
+        await uploadPromoImageFile(
+          imageFile
+        );
+
+    }
+
 
     const { error } =
       await supabaseClient
-
         .from('promos')
-
         .insert({
 
           title,
@@ -14633,6 +16212,16 @@ async function addPromo(){
               'new-promo-price'
             ),
 
+          image_url:
+            uploadedImage
+              ? uploadedImage.imageUrl
+              : null,
+
+          storage_path:
+            uploadedImage
+              ? uploadedImage.storagePath
+              : null,
+
           active:
             true
 
@@ -14640,6 +16229,18 @@ async function addPromo(){
 
 
     if(error){
+
+      if(
+        uploadedImage &&
+        uploadedImage.storagePath
+      ){
+
+        await deletePromoStorageImage(
+          uploadedImage.storagePath
+        );
+
+      }
+
       throw error;
     }
 
@@ -14657,6 +16258,7 @@ async function addPromo(){
     );
 
   }
+
 }
 
 /* ==================================================================
@@ -15171,8 +16773,14 @@ async function deleteFaqItem(id){
   }
 
   if(
-    !confirm(
-      '¿Querés eliminar esta pregunta frecuente?'
+    !(
+      await openAppConfirm(
+        '¿Querés eliminar esta pregunta frecuente?',
+        {
+          title:'Eliminar pregunta',
+          confirmText:'Eliminar'
+        }
+      )
     )
   ){
     return;

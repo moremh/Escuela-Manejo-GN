@@ -2,289 +2,251 @@
 <html lang="es-AR">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clases de Manejo Tuc</title>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
-    rel="preconnect"
-    href="https://fonts.googleapis.com"
-  >
-
-  <link
-    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500;600&display=swap"
     rel="stylesheet"
   >
 
-  <link
-    rel="icon"
-    type="image/png"
-    href="./img/logo.png"
-  >
-
-  <link
-    rel="stylesheet"
-    href="./css/style.css"
-  >
+  <link rel="icon" type="image/png" href="./img/logo.png">
+  <link rel="stylesheet" href="./css/style.css">
 </head>
-
 <body>
 
-  <!-- ============ SITIO PÚBLICO ============ -->
+<!-- ============ PUBLIC SITE ============ -->
+<div id="public-view">
 
-  <div id="public-view">
+  <header class="site">
+    <div class="navbar">
+      <button
+        class="brand public-brand"
+        type="button"
+        onclick="goPublic('inicio')"
+        aria-label="Ir al inicio"
+      >
+        <span class="steering-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="18"></circle>
+            <circle cx="24" cy="24" r="4"></circle>
+            <path d="M9 22c8-3 22-3 30 0M24 28v12M20 27l-9 8M28 27l9 8"></path>
+          </svg>
+        </span>
+        <span>Clases de Manejo Tuc</span>
+      </button>
 
-    <header class="site">
-      <div class="navbar">
+      <button
+        class="cta-btn top-reserve"
+        type="button"
+        onclick="goPublic('reservas')"
+      >
+        Reservar ahora
+      </button>
 
-        <div class="brand">
-          <span class="dot"></span>
-          Clases de Manejo Tuc
-        </div>
+      <button
+        class="nav-toggle"
+        id="nav-toggle-btn"
+        type="button"
+        onclick="toggleMobileNav()"
+        aria-label="Abrir menú"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
 
-        <button
-          class="cta-btn top-reserve"
-          type="button"
-          onclick="goPublic('reservas')"
-        >
-          Reservar ahora
-        </button>
+      <nav class="links" id="pub-nav"></nav>
+    </div>
 
-        <button
-          class="nav-toggle"
-          id="nav-toggle-btn"
-          type="button"
-          onclick="toggleMobileNav()"
-          aria-label="Abrir menú"
-        >
-          ☰
-        </button>
+    <div class="laneline"></div>
+  </header>
 
-        <nav
-          class="links"
-          id="pub-nav"
-        ></nav>
+  <main id="pub-sections"></main>
 
-      </div>
+  <a
+    class="wa-float hidden"
+    id="wa-float-btn"
+    href="#"
+    target="_blank"
+    rel="noopener noreferrer"
+    title="Escribinos por WhatsApp"
+  >
+    <svg viewBox="0 0 32 32">
+      <path d="M16 3C9 3 3.3 8.6 3.3 15.5c0 2.5.7 4.8 1.9 6.8L3 29l6.9-2.1c1.9 1 4 1.6 6.1 1.6 7 0 12.7-5.6 12.7-12.5C28.7 8.6 23 3 16 3zm0 22.8c-1.9 0-3.7-.5-5.3-1.5l-.4-.2-4.1 1.2 1.2-4-.3-.4a10.3 10.3 0 0 1-1.7-5.4C5.4 9.7 10.1 5 16 5s10.6 4.7 10.6 10.5S21.9 25.8 16 25.8zm5.8-7.9c-.3-.2-1.9-.9-2.2-1s-.5-.2-.7.2-.8 1-1 1.2-.4.2-.7.1a8.7 8.7 0 0 1-2.6-1.6 9.7 9.7 0 0 1-1.8-2.2c-.2-.3 0-.5.1-.7l.5-.6.3-.5c.1-.2 0-.4 0-.5s-.7-1.7-1-2.3-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4a3.5 3.5 0 0 0-1.1 2.6c0 1.5 1.1 3 1.3 3.2s2.2 3.4 5.3 4.7c.7.3 1.3.5 1.8.6.7.2 1.4.2 1.9.1.6-.1 1.9-.8 2.2-1.5s.3-1.4.2-1.5-.3-.2-.6-.3z"/>
+    </svg>
+  </a>
 
-      <div class="laneline"></div>
-    </header>
-
-    <main id="pub-sections"></main>
+  <div class="mobile-action-bar" id="mobile-action-bar">
+    <button
+      type="button"
+      onclick="goPublic('reservas')"
+    >
+      Reservar ahora
+    </button>
 
     <a
-      class="wa-float hidden"
-      id="wa-float-btn"
+      id="mobile-wa-btn"
       href="#"
       target="_blank"
       rel="noopener noreferrer"
-      title="Escribinos por WhatsApp"
     >
-      <svg viewBox="0 0 32 32">
-        <path d="M16 3C9 3 3.3 8.6 3.3 15.5c0 2.5.7 4.8 1.9 6.8L3 29l6.9-2.1c1.9 1 4 1.6 6.1 1.6 7 0 12.7-5.6 12.7-12.5C28.7 8.6 23 3 16 3zm0 22.8c-1.9 0-3.7-.5-5.3-1.5l-.4-.2-4.1 1.2 1.2-4-.3-.4a10.3 10.3 0 0 1-1.7-5.4C5.4 9.7 10.1 5 16 5s10.6 4.7 10.6 10.5S21.9 25.8 16 25.8zm5.8-7.9c-.3-.2-1.9-.9-2.2-1s-.5-.2-.7.2-.8 1-1 1.2-.4.2-.7.1a8.7 8.7 0 0 1-2.6-1.6 9.7 9.7 0 0 1-1.8-2.2c-.2-.3 0-.5.1-.7l.5-.6.3-.5c.1-.2 0-.4 0-.5s-.7-1.7-1-2.3-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4a3.5 3.5 0 0 0-1.1 2.6c0 1.5 1.1 3 1.3 3.2s2.2 3.4 5.3 4.7c.7.3 1.3.5 1.8.6.7.2 1.4.2 1.9.1.6-.1 1.9-.8 2.2-1.5s.3-1.4.2-1.5-.3-.2-.6-.3z"/>
-      </svg>
+      WhatsApp
     </a>
-
-    <footer class="site">
-      <div class="wrap">
-
-        <span>
-          © <span id="year"></span>
-          Clases de Manejo Tuc — San Miguel de Tucumán
-        </span>
-
-        <button
-          class="link"
-          type="button"
-          onclick="openAdmin()"
-        >
-          Acceso administrador
-        </button>
-
-      </div>
-    </footer>
-
   </div>
 
-  <!-- ============ ADMINISTRADOR ============ -->
+  <footer class="site">
+    <div class="wrap footer-modern">
+      <div class="footer-brand-block">
+        <div class="brand footer-brand">
+          <span class="steering-brand-mark small" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="18"></circle>
+              <circle cx="24" cy="24" r="4"></circle>
+              <path d="M9 22c8-3 22-3 30 0M24 28v12M20 27l-9 8M28 27l9 8"></path>
+            </svg>
+          </span>
+          <span>Clases de Manejo Tuc</span>
+        </div>
+        <span class="footer-sub">Clases personalizadas · Tucumán, Argentina</span>
+      </div>
 
-  <div
-    id="admin-view"
-    class="hidden"
-  >
+      <span>
+        © <span id="year"></span>
+        Clases de Manejo Tuc
+      </span>
 
-    <!-- LOGIN -->
+      <button
+        class="link"
+        type="button"
+        onclick="openAdmin()"
+      >
+        Acceso administrador
+      </button>
+    </div>
+  </footer>
+</div>
 
-    <div
-      id="admin-login-screen"
-      class="admin-login"
-    >
+<!-- ============ ADMIN ============ -->
+<div id="admin-view" class="hidden">
+  <div id="admin-login-screen" class="admin-login">
+    <div class="box admin-login-card">
+      <div class="admin-login-brand" aria-hidden="true">
+        <span class="steering-brand-mark">
+          <svg viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="18"></circle>
+            <circle cx="24" cy="24" r="4"></circle>
+            <path d="M9 22c8-3 22-3 30 0M24 28v12M20 27l-9 8M28 27l9 8"></path>
+          </svg>
+        </span>
+      </div>
 
-      <div class="box">
+      <div class="eyebrow">Panel interno</div>
 
-        <div class="eyebrow">
-          Panel interno
+      <h2>Ingresar al panel</h2>
+
+      <p class="admin-login-copy">
+        Gestión privada de agenda, alumnas, pagos y contenido del sitio.
+      </p>
+
+      <form id="login-form" onsubmit="return handleLogin(event)">
+        <div class="field">
+          <label for="login-email">Correo electrónico</label>
+
+          <input
+            id="login-email"
+            type="email"
+            autocomplete="email"
+            required
+            placeholder="correo@ejemplo.com"
+          >
         </div>
 
-        <h2>Ingresar</h2>
+        <div class="field">
+          <label for="login-pass">Contraseña</label>
 
-        <p
-          style="
-            color:var(--ink-soft);
-            font-size:14px;
-          "
-        >
-          Acceso exclusivo para la dueña del emprendimiento.
-        </p>
-
-        <form
-          id="login-form"
-          onsubmit="return handleLogin(event)"
-        >
-
-          <div class="field">
-
-            <label for="login-email">
-              Correo electrónico
-            </label>
-
-            <input
-              id="login-email"
-              name="email"
-              type="email"
-              autocomplete="email"
-              required
-              placeholder="correo@ejemplo.com"
-            >
-
-          </div>
-
-          <div class="field">
-
-            <label for="login-pass">
-              Contraseña
-            </label>
-
-            <input
-              id="login-pass"
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              required
-              placeholder="••••••••"
-            >
-
-          </div>
-
-          <div
-            id="login-error"
-            class="error-box hidden"
-            role="alert"
-            aria-live="polite"
+          <input
+            id="login-pass"
+            type="password"
+            autocomplete="current-password"
+            required
+            placeholder="••••••••"
           >
-            Correo o contraseña incorrectos.
-          </div>
+        </div>
 
+        <div
+          id="login-error"
+          class="error-box hidden"
+          role="alert"
+          aria-live="polite"
+        >
+          Correo o contraseña incorrectos.
+        </div>
+
+        <button
+          class="cta-btn"
+          style="width:100%;margin-top:6px;"
+          type="submit"
+        >
+          Ingresar
+        </button>
+      </form>
+
+      <button
+        class="link"
+        type="button"
+        style="background:none;border:none;color:var(--ink-soft);text-decoration:underline;margin-top:10px;font-family:'Source Serif 4',serif;"
+        onclick="closeAdmin()"
+      >
+        Volver al sitio
+      </button>
+    </div>
+  </div>
+
+  <div id="admin-dashboard-screen" class="hidden">
+    <div class="admin-top">
+      <div class="wrap">
+        <div class="brand admin-top-brand" id="admin-top-brand">
+          <span class="steering-brand-mark small" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="18"></circle>
+              <circle cx="24" cy="24" r="4"></circle>
+              <path d="M9 22c8-3 22-3 30 0M24 28v12M20 27l-9 8M28 27l9 8"></path>
+            </svg>
+          </span>
+          <span id="admin-top-title">Panel administrador</span>
+        </div>
+
+        <div style="display:flex;gap:10px;">
           <button
-            class="cta-btn"
-            style="
-              width:100%;
-              margin-top:6px;
-            "
-            type="submit"
+            class="cta-btn ghost small"
+            type="button"
+            onclick="closeAdmin()"
           >
-            Ingresar
+            Ver sitio público
           </button>
 
-        </form>
-
-        <button
-          class="link"
-          type="button"
-          style="
-            background:none;
-            border:none;
-            color:var(--ink-soft);
-            text-decoration:underline;
-            margin-top:10px;
-            font-family:'Source Serif 4', serif;
-          "
-          onclick="closeAdmin()"
-        >
-          Volver al sitio
-        </button>
-
-      </div>
-    </div>
-
-    <!-- PANEL ADMINISTRATIVO -->
-
-    <div
-      id="admin-dashboard-screen"
-      class="hidden"
-    >
-
-      <div class="admin-top">
-
-        <div class="wrap">
-
-          <div class="brand">
-            <span class="dot"></span>
-            Panel — Clases de Manejo Tuc
-          </div>
-
-          <div
-            style="
-              display:flex;
-              gap:10px;
-            "
+          <button
+            class="cta-btn small"
+            type="button"
+            onclick="logoutAdmin()"
           >
-
-            <button
-              class="cta-btn ghost small"
-              type="button"
-              onclick="closeAdmin()"
-            >
-              Ver sitio público
-            </button>
-
-            <button
-              class="cta-btn small"
-              type="button"
-              onclick="logoutAdmin()"
-            >
-              Cerrar sesión
-            </button>
-
-          </div>
-
+            Cerrar sesión
+          </button>
         </div>
       </div>
-
-      <div class="admin-shell">
-
-        <div
-          class="admin-nav"
-          id="admin-nav"
-        ></div>
-
-        <div
-          class="admin-main"
-          id="admin-main"
-        ></div>
-
-      </div>
-
     </div>
 
+    <div class="admin-shell">
+      <div class="admin-nav" id="admin-nav"></div>
+      <div class="admin-main" id="admin-main"></div>
+    </div>
   </div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./js/supabase-config.js"></script>
-  <script src="./js/script.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./js/supabase-config.js"></script>
+<script src="./js/script.js"></script>
 </body>
 </html>
