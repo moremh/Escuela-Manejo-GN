@@ -10705,7 +10705,8 @@ function renderAdminStudents(){
                     id="student-search"
                     type="search"
                     placeholder="
-                      Buscar por nombre, teléfono o dirección...
+                      Buscar por nombre,
+                      teléfono o dirección...
                     "
                     value="${
                       escapeHTML(
@@ -11306,7 +11307,10 @@ function renderAdminStudents(){
                         <textarea
                           id="student-observation-${student.id}"
                           rows="3"
-                          placeholder=" Ej: hoy practicó estacionamiento y necesita reforzar el uso de espejos."
+                          placeholder="
+                            Ej: hoy practicó estacionamiento
+                            y necesita reforzar el uso de espejos.
+                          "
                         ></textarea>
 
                       </div>
@@ -14211,7 +14215,7 @@ function renderAdminGallery(){
             <input
               type="file"
               id="gal-file"
-              accept="image/*"
+              accept="image/*,.heic,.heif"
               required
             >
           </div>
@@ -14249,9 +14253,11 @@ function renderAdminGallery(){
         </form>
 
         <p class="note">
-          Las fotos se comprimen
-          automáticamente y se guardan
-          en Supabase Storage.
+          Podés subir JPG, PNG, WEBP,
+          HEIC o HEIF. Las fotos se
+          convierten y comprimen
+          automáticamente antes de
+          guardarse en Supabase Storage.
         </p>
       </div>
 
@@ -14318,47 +14324,337 @@ function renderAdminGallery(){
     `;
 }
 
-function resizeImageFile(
+function isHeicImageFile(
+  file
+){
+
+  if(!file){
+    return false;
+  }
+
+
+  const type =
+    String(
+      file.type || ''
+    )
+      .toLowerCase();
+
+
+  const name =
+    String(
+      file.name || ''
+    )
+      .toLowerCase();
+
+
+  return (
+    type === 'image/heic' ||
+    type === 'image/heif' ||
+    name.endsWith('.heic') ||
+    name.endsWith('.heif')
+  );
+
+}
+
+
+function loadExternalScript(
+  src
+){
+
+  return new Promise(
+    (resolve,reject)=>{
+
+      const existing =
+        Array.from(
+          document.scripts
+        )
+          .find(
+            script=>
+              script.src === src
+          );
+
+
+      if(existing){
+
+        if(
+          typeof window.heic2any ===
+          'function'
+        ){
+          resolve();
+          return;
+        }
+
+
+        existing.addEventListener(
+          'load',
+          ()=>resolve(),
+          {
+            once:true
+          }
+        );
+
+
+        existing.addEventListener(
+          'error',
+          ()=>reject(
+            new Error(
+              'No se pudo cargar el conversor HEIC.'
+            )
+          ),
+          {
+            once:true
+          }
+        );
+
+        return;
+      }
+
+
+      const script =
+        document.createElement(
+          'script'
+        );
+
+      script.src =
+        src;
+
+      script.async =
+        true;
+
+      script.onload =
+        ()=>resolve();
+
+      script.onerror =
+        ()=>reject(
+          new Error(
+            'No se pudo cargar el conversor HEIC.'
+          )
+        );
+
+      document.head
+        .appendChild(
+          script
+        );
+
+    }
+  );
+
+}
+
+
+async function ensureHeicConverter(){
+
+  if(
+    typeof window.heic2any ===
+    'function'
+  ){
+    return;
+  }
+
+
+  const sources = [
+    'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js',
+    'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js'
+  ];
+
+
+  let lastError =
+    null;
+
+
+  for(
+    const source
+    of sources
+  ){
+
+    try{
+
+      await loadExternalScript(
+        source
+      );
+
+
+      if(
+        typeof window.heic2any ===
+        'function'
+      ){
+        return;
+      }
+
+    }catch(error){
+
+      lastError =
+        error;
+
+    }
+
+  }
+
+
+  const error =
+    new Error(
+      'No se pudo cargar el conversor para imágenes HEIC/HEIF. Revisá la conexión a internet e intentá nuevamente.'
+    );
+
+  error.code =
+    'HEIC_CONVERTER_UNAVAILABLE';
+
+  error.cause =
+    lastError;
+
+  throw error;
+
+}
+
+
+async function convertHeicToJpeg(
+  file
+){
+
+  await ensureHeicConverter();
+
+
+  try{
+
+    let converted =
+      await window.heic2any({
+        blob:file,
+        toType:'image/jpeg',
+        quality:0.92
+      });
+
+
+    if(
+      Array.isArray(
+        converted
+      )
+    ){
+
+      converted =
+        converted[0];
+
+    }
+
+
+    if(
+      !(converted instanceof Blob)
+    ){
+
+      throw new Error(
+        'El conversor no devolvió una imagen válida.'
+      );
+
+    }
+
+
+    return new File(
+      [
+        converted
+      ],
+      String(
+        file.name ||
+        'imagen'
+      )
+        .replace(
+          /\.(heic|heif)$/i,
+          ''
+        ) +
+        '.jpg',
+      {
+        type:'image/jpeg',
+        lastModified:
+          Date.now()
+      }
+    );
+
+
+  }catch(originalError){
+
+    const error =
+      new Error(
+        'No se pudo convertir la imagen HEIC/HEIF. Probá nuevamente o elegí otra foto.'
+      );
+
+    error.code =
+      'HEIC_CONVERSION_FAILED';
+
+    error.cause =
+      originalError;
+
+    throw error;
+
+  }
+
+}
+
+
+function resizeRasterImageFile(
   file,
   maxSize = 900,
   quality = 0.78
 ){
+
   return new Promise(
-    (resolve, reject)=>{
+    (resolve,reject)=>{
+
       const reader =
         new FileReader();
 
+
       reader.onerror = ()=>{
-        reject(
+
+        const error =
           new Error(
             'No se pudo leer el archivo.'
-          )
+          );
+
+        error.code =
+          'IMAGE_READ_FAILED';
+
+        reject(
+          error
         );
+
       };
 
+
       reader.onload = ()=>{
+
         const image =
           new Image();
 
+
         image.onerror = ()=>{
-          reject(
+
+          const error =
             new Error(
-              'No se pudo procesar la imagen.'
-            )
+              'No se pudo procesar el formato de la imagen.'
+            );
+
+          error.code =
+            'IMAGE_DECODE_FAILED';
+
+          reject(
+            error
           );
+
         };
 
+
         image.onload = ()=>{
+
           let width =
             image.width;
 
           let height =
             image.height;
 
+
           if(
             width > height &&
             width > maxSize
           ){
+
             height =
               Math.round(
                 height *
@@ -14366,10 +14662,13 @@ function resizeImageFile(
                 width
               );
 
-            width = maxSize;
+            width =
+              maxSize;
+
           }else if(
             height > maxSize
           ){
+
             width =
               Math.round(
                 width *
@@ -14377,19 +14676,47 @@ function resizeImageFile(
                 height
               );
 
-            height = maxSize;
+            height =
+              maxSize;
+
           }
+
 
           const canvas =
             document.createElement(
               'canvas'
             );
 
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width =
+            width;
+
+          canvas.height =
+            height;
+
 
           const context =
-            canvas.getContext('2d');
+            canvas.getContext(
+              '2d'
+            );
+
+
+          if(!context){
+
+            const error =
+              new Error(
+                'No se pudo preparar la imagen.'
+              );
+
+            error.code =
+              'IMAGE_CANVAS_FAILED';
+
+            reject(
+              error
+            );
+
+            return;
+          }
+
 
           context.drawImage(
             image,
@@ -14399,30 +14726,101 @@ function resizeImageFile(
             height
           );
 
+
           canvas.toBlob(
             blob=>{
+
               if(blob){
-                resolve(blob);
+
+                resolve(
+                  blob
+                );
+
               }else{
-                reject(
+
+                const error =
                   new Error(
                     'No se pudo comprimir la imagen.'
-                  )
+                  );
+
+                error.code =
+                  'IMAGE_COMPRESS_FAILED';
+
+                reject(
+                  error
                 );
+
               }
+
             },
             'image/jpeg',
             quality
           );
+
         };
+
 
         image.src =
           reader.result;
+
       };
 
-      reader.readAsDataURL(file);
+
+      reader.readAsDataURL(
+        file
+      );
+
     }
   );
+
+}
+
+
+async function resizeImageFile(
+  file,
+  maxSize = 900,
+  quality = 0.78
+){
+
+  if(!file){
+
+    const error =
+      new Error(
+        'No se seleccionó ninguna imagen.'
+      );
+
+    error.code =
+      'IMAGE_MISSING';
+
+    throw error;
+
+  }
+
+
+  let sourceFile =
+    file;
+
+
+  if(
+    isHeicImageFile(
+      file
+    )
+  ){
+
+    sourceFile =
+      await convertHeicToJpeg(
+        file
+      );
+
+  }
+
+
+  return resizeRasterImageFile(
+    sourceFile,
+    maxSize,
+    quality
+  );
+
 }
 
 async function addGalleryPhoto(event){
@@ -14587,20 +14985,96 @@ async function addGalleryPhoto(event){
     await loadAdminData();
     renderAdminGallery();
   }catch(error){
+
     console.error(
       'No se pudo subir la foto:',
       error
     );
 
+
+    let userMessage =
+      'No se pudo subir la foto.';
+
+
+    if(
+      error &&
+      (
+        error.code ===
+          'HEIC_CONVERTER_UNAVAILABLE' ||
+        error.code ===
+          'HEIC_CONVERSION_FAILED'
+      )
+    ){
+
+      userMessage =
+        error.message;
+
+    }else if(
+      error &&
+      (
+        error.code ===
+          'IMAGE_READ_FAILED' ||
+        error.code ===
+          'IMAGE_DECODE_FAILED' ||
+        error.code ===
+          'IMAGE_CANVAS_FAILED' ||
+        error.code ===
+          'IMAGE_COMPRESS_FAILED'
+      )
+    ){
+
+      userMessage =
+        'No pudimos procesar esa imagen. Probá nuevamente o elegí otra foto.';
+
+    }else{
+
+      const databaseMessage =
+        String(
+          error &&
+          error.message
+            ? error.message
+            : ''
+        )
+          .toLowerCase();
+
+
+      if(
+        databaseMessage.includes(
+          'bucket'
+        ) ||
+        databaseMessage.includes(
+          'storage'
+        ) ||
+        databaseMessage.includes(
+          'row-level security'
+        ) ||
+        databaseMessage.includes(
+          'policy'
+        )
+      ){
+
+        userMessage =
+          'La imagen se pudo procesar, pero Supabase no permitió guardarla. Revisá el bucket "gallery" y sus permisos.';
+
+      }else if(
+        databaseMessage
+      ){
+
+        userMessage =
+          'No se pudo guardar la foto. ' +
+          error.message;
+
+      }
+
+    }
+
+
     messageBox.innerHTML = `
       <div class="error-box">
-        No se pudo subir la foto.
-        Verificá que el bucket
-        "gallery" esté creado y que
-        la imagen no sea demasiado
-        pesada.
+        ${escapeHTML(userMessage)}
       </div>
     `;
+
   }finally{
     submitButton.disabled = false;
     submitButton.textContent =
